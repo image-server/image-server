@@ -21,9 +21,11 @@ type Stats struct {
 
 // Status keeps the current state of the server
 type Status struct {
-	Version string `json:"version"`
-	Message string `json:"message"`
-	Posting *Stats `json:"posting"`
+	Version    string `json:"version"`
+	GitHash    string `json:"githash"`
+	BuildStamp string `json:"buildstamp"`
+	Message    string `json:"message"`
+	Posting    *Stats `json:"posting"`
 }
 
 // ShuttingDown variable is used to note that the server is about to shut down.
@@ -61,8 +63,10 @@ func DecrCounter(addr *uint64) {
 }
 
 var status = &Status{
-	Version: core.VERSION,
-	Posting: &Stats{Current: 0, TotalCount: 0, FailedCount: 0},
+	Version:    core.VERSION,
+	GitHash:    core.GitHash,
+	BuildStamp: core.BuildStamp,
+	Posting:    &Stats{Current: 0, TotalCount: 0, FailedCount: 0},
 }
 
 // ServerStatus implements the http.Handler interface

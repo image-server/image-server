@@ -17,5 +17,5 @@ func runVersion(cmd *Command, args []string) {
 	if len(args) != 0 {
 		cmd.Usage()
 	}
-	fmt.Printf("images version %s\n", core.VERSION)
+	fmt.Printf("images version [%s]\ngit hash [%s]\nbuild stamp [%s]\n", core.VERSION, core.GitHash, core.BuildStamp)
 }

@@ -1,0 +1,5 @@
+steps:
+  - label: "Build and Push Dockerfiles"
+    command:
+      - "docker build -t $REGISTRY_URI:$SHORT_COMMIT_HASH --build-arg SHORT_COMMIT_HASH=$SHORT_COMMIT_HASH ."
+      - "docker push $REGISTRY_URI:$SHORT_COMMIT_HASH"

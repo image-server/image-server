@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -eu
+
+export SHORT_COMMIT_HASH="$(git rev-parse --short HEAD)"
