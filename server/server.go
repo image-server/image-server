@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/codegangsta/negroni"
+	"github.com/urfave/negroni"
 	"github.com/gorilla/mux"
 	"github.com/image-server/image-server/core"
 	"github.com/tylerb/graceful"
