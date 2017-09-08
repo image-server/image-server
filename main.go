@@ -16,6 +16,7 @@ import (
 	"github.com/image-server/image-server/logger/statsd"
 	"github.com/image-server/image-server/paths"
 	"github.com/image-server/image-server/uploader"
+	"path/filepath"
 )
 
 // configT collects all the global state of the logging setup.
@@ -32,6 +33,7 @@ type configT struct {
 	listen    string
 
 	uploaderType string
+	maxFileAge   int
 
 	awsAccessKeyID string
 	awsSecretKey   string
@@ -161,6 +163,7 @@ func registerFlags() {
 
 	// Uploader
 	flag.StringVar(&config.uploaderType, "uploader", "", "Uploader ['s3', 'manta']")
+	flag.IntVar(&config.maxFileAge, "max_file_age", 30, "Max file age in minutes")
 
 	// S3 uploader
 	flag.StringVar(&config.awsAccessKeyID, "aws_access_key_id", "", "S3 Access Key")
@@ -203,6 +206,44 @@ func initializeUploader(sc *core.ServerConfiguration) {
 	}
 }
 
+func initializeFileCleaner(sc *core.ServerConfiguration) {
+	go func() {
+		absolutePath, err := filepath.Abs(sc.LocalBasePath)
+		if err != nil {
+			log.Printf("Error Starting File Cleaner - Unable to create absolute path [%s]", sc.LocalBasePath)
+		} else {
+			var stat, _ = os.Stat(absolutePath)
+			if absolutePath != "" && stat.IsDir() {
+				log.Printf("Starting File Cleaner on path [%s]", absolutePath)
+				filepath.Walk(absolutePath, func(path string, info os.FileInfo, err error) error {
+					if !info.IsDir() {
+						age := time.Now().Sub(info.ModTime())
+						log.Printf("Workspace Contains at Startup file [%s] size [%d] modTime [%s] age [%s]\n", path, info.Size(), info.ModTime(), age)
+					}
+					return nil
+				})
+				for range sc.CleanUpTicker.C {
+					filepath.Walk(absolutePath, func(path string, info os.FileInfo, err error) error {
+						if !info.IsDir() {
+							age := time.Now().Sub(info.ModTime())
+							if age > sc.MaxFileAge {
+								log.Printf("Deleting file [%s] size [%d] modTime [%s] age [%s]\n", path, info.Size(), info.ModTime(), age)
+								var err = os.Remove(path)
+								if err != nil {
+									log.Printf("Error deleting file [%s]\n", path)
+								}
+							}
+						}
+						return nil
+					})
+				}
+			} else {
+				log.Printf("Error Starting File Cleaner - Invalid walk path [%s]", absolutePath)
+			}
+		}
+	}()
+}
+
 func serverConfiguration() (*core.ServerConfiguration, error) {
 	sc := serverConfigurationFromConfig()
 	statsd.Enable(config.statsdHost, config.statsdPort, config.statsdPrefix)
@@ -213,6 +254,7 @@ func serverConfiguration() (*core.ServerConfiguration, error) {
 		Paths:   &paths.Paths{LocalBasePath: sc.LocalBasePath, RemoteBasePath: sc.RemoteBasePath, RemoteBaseURL: sc.RemoteBaseURL},
 	}
 	sc.Adapters = adapters
+	sc.CleanUpTicker = time.NewTicker(5 * time.Second)
 
 	return sc, nil
 }
@@ -223,8 +265,14 @@ func serverConfiguration() (*core.ServerConfiguration, error) {
 // as globals. Flags succeeding the Command are not globals.
 func serverConfigurationFromConfig() *core.ServerConfiguration {
 	httpTimeout := time.Duration(config.httpTimeout) * time.Second
+	var maxFileAge time.Duration
+	if config.maxFileAge > 0 {
+		maxFileAge = time.Duration(config.maxFileAge) * time.Minute
+	} else {
+		maxFileAge = time.Minute
+	}
 
-	var uploader  string
+	var uploader string
 	if config.uploaderType != "" {
 		uploader = config.uploaderType
 	} else {
@@ -246,6 +294,7 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 		RemoteBaseURL:  config.remoteBaseURL,
 
 		UploaderType: uploader,
+		MaxFileAge:   maxFileAge,
 
 		// AWS specific
 		AWSAccessKeyID: config.awsAccessKeyID,

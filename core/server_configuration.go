@@ -27,6 +27,8 @@ type ServerConfiguration struct {
 	MantaKeyID            string
 	SDCIdentity           string
 	UploaderType          string
+	CleanUpTicker         *time.Ticker
+	MaxFileAge            time.Duration
 }
 
 func (sc *ServerConfiguration) UploaderIsAws() bool {

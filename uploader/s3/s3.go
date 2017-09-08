@@ -30,7 +30,7 @@ func (u *Uploader) Upload(source string, destination string, contType string) er
 	}
 	defer reader.Close()
 
-	timeout, _ := time.ParseDuration("4m")
+	timeout := 4 * time.Minute
 
 	ctx := context.Background()
 	var cancelFn func()
@@ -95,7 +95,7 @@ func Initialize(bucketName string, regionName string) {
 	// the environment, shared credentials (~/.aws/credentials), or EC2 Instance
 	// Role. These credentials will be used to to make the STS Assume Role API.
 	sess := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String(regionName),
+		Region:     aws.String(regionName),
 		MaxRetries: aws.Int(4),
 	}))
 	manager = s3manager.NewUploader(sess)

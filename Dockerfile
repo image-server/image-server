@@ -15,12 +15,10 @@ FROM alpine:3.6
 RUN apk add --no-cache imagemagick
 RUN apk add --no-cache ca-certificates
 
-ENV BASE_PATH /opt/image-server
+WORKDIR /opt/image-server
 
-WORKDIR ${BASE_PATH}
-
-RUN mkdir -p workspace
-RUN chmod 775 -R workspace
+RUN mkdir -p public
+RUN chmod 775 -R public
 
 COPY start.sh .
 

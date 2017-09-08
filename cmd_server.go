@@ -75,6 +75,7 @@ func runServer(cmd *Command, args []string) {
 	}
 
 	go initializeUploader(sc)
+	go initializeFileCleaner(sc)
 
 	port := config.port
 	server.InitializeServer(sc, config.listen, port)
