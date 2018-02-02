@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/image-server/image-server/server"
+	"github.com/image-server/image-server/file_garbage_collector"
 )
 
 var cmdServer = &Command{
@@ -75,7 +76,7 @@ func runServer(cmd *Command, args []string) {
 	}
 
 	go initializeUploader(sc)
-	go initializeFileCleaner(sc)
+	go file_garbage_collector.Start(sc)
 
 	port := config.port
 	server.InitializeServer(sc, config.listen, port)
