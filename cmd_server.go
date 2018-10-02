@@ -8,8 +8,8 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/image-server/image-server/server"
 	"github.com/image-server/image-server/file_garbage_collector"
+	"github.com/image-server/image-server/server"
 )
 
 var cmdServer = &Command{

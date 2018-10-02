@@ -196,7 +196,15 @@ Make sure you increase the version number in core/version.go
 make release
 ```
 
-## Statsd Events
+## Statsd
+
+To enable the statsd events, use the flag `enable_statsd`:
+
+```
+bin/images --enable_statsd
+```
+
+### Statsd Events
 
 A local cache was not found and the image was processed. This also tracks count of images sent to remote store.
 ```
@@ -222,6 +230,17 @@ The original image is not available, and a 404 was returned
 ```
 stats.image_server.original_unavailable
 ```
+
+## Prometheus metrics
+
+To enable the prometheus collector and expose the prometheus metrics, use the flag `enable_prometheus_metrics`:
+
+```
+bin/images --enable_prometheus_metrics
+```
+
+The metrics will be exposed to the `/metrics` endpoint `localhost:6060/metrics`.
+
 
 ## Profiling
 

@@ -5,10 +5,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/urfave/negroni"
 	"github.com/gorilla/mux"
 	"github.com/image-server/image-server/core"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/tylerb/graceful"
+	"github.com/urfave/negroni"
 )
 
 // InitializeServer creates a new http server to handle image processing requests
@@ -24,6 +25,9 @@ func InitializeServer(sc *core.ServerConfiguration, listen string, port string) 
 // NewRouter creates a mux.Router for use in code or in tests
 func NewRouter(sc *core.ServerConfiguration) *mux.Router {
 	router := mux.NewRouter()
+	if sc.EnablePrometheusMetrics {
+		router.Handle("/metrics", promhttp.Handler())
+	}
 	router.HandleFunc("/{namespace:[a-z0-9_]+}", func(wr http.ResponseWriter, req *http.Request) {
 		NewImageHandler(wr, req, sc)
 	}).Methods("POST").Name("newImage")
