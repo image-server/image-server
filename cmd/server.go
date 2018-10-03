@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -88,8 +87,8 @@ func init() {
 	serverCmd.Flags().IntVar(&config.statsdPort, "statsd_port", 8125, "Statsd port")
 	serverCmd.Flags().StringVar(&config.statsdPrefix, "statsd_prefix", "image_server.", "Statsd prefix")
 	serverCmd.Flags().BoolVar(&config.profile, "profile", false, "Enable pprof")
-	flag.BoolVar(&config.enablePrometheusMetrics, "enable_prometheus_metrics", false, "Enable prometheus metrics")
-	flag.BoolVar(&config.enableStatsd, "enable_statsd", false, "Enable statsd metrics")
+	serverCmd.Flags().BoolVar(&config.enablePrometheusMetrics, "enable_prometheus_metrics", false, "Enable prometheus metrics")
+	serverCmd.Flags().BoolVar(&config.enableStatsd, "enable_statsd", false, "Enable statsd metrics")
 }
 
 func handleShutdownSignals() {

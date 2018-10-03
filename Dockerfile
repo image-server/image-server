@@ -1,6 +1,6 @@
 FROM golang:1.9-alpine3.6
 
-MAINTAINER Thomas Barton
+LABEL maintainer="Thomas Barton"
 
 WORKDIR ${GOPATH}/src/github.com/image-server/image-server
 

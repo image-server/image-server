@@ -10,6 +10,7 @@ import (
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/fetcher/http"
 	"github.com/image-server/image-server/logger/logfile"
+	"github.com/image-server/image-server/logger/prometheus"
 	"github.com/image-server/image-server/logger/statsd"
 	"github.com/image-server/image-server/paths"
 	"github.com/image-server/image-server/uploader"
@@ -117,7 +118,12 @@ func initConfig() {
 
 func serverConfiguration() (*core.ServerConfiguration, error) {
 	sc := serverConfigurationFromConfig()
-	statsd.Enable(config.statsdHost, config.statsdPort, config.statsdPrefix)
+	if config.enableStatsd {
+		statsd.Enable(config.statsdHost, config.statsdPort, config.statsdPrefix)
+	}
+	if config.enablePrometheusMetrics {
+		prometheus.Enable()
+	}
 	logfile.Enable()
 
 	adapters := &core.Adapters{
@@ -178,6 +184,9 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 		MantaUser:   config.mantaUser,
 		MantaKeyID:  config.mantaKeyID,
 		SDCIdentity: config.sdcIdentity,
+
+		// Prometheus monitoring
+		EnablePrometheusMetrics: config.enablePrometheusMetrics,
 
 		Outputs:             config.outputs,
 		DefaultQuality:      uint(config.defaultQuality),
