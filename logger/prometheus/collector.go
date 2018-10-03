@@ -6,37 +6,35 @@ import (
 
 // ImageServerCollector the prometheus collector for the image server
 type Metrics struct {
-	imagePostedMetric               *prometheus.CounterVec
-	imagePostingFailedMetric        *prometheus.CounterVec
+	imagePostedMetric               prometheus.Counter
+	imagePostingFailedMetric        prometheus.Counter
 	imageProcessedMetric            *prometheus.CounterVec
 	imageAlreadyProcessedMetric     *prometheus.CounterVec
 	imageProcessedWithErrorsMetric  *prometheus.CounterVec
 	allImagesAlreadyProcessedMetric *prometheus.CounterVec
-	sourceDownloadedMetric          *prometheus.CounterVec
-	originalDownloadedMetric        *prometheus.CounterVec
-	originalDownloadFailedMetric    *prometheus.CounterVec
-	originalDownloadSkippedMetric   *prometheus.CounterVec
+	sourceDownloadedMetric          prometheus.Counter
+	originalDownloadedMetric        prometheus.Counter
+	originalDownloadFailedMetric    prometheus.Counter
+	originalDownloadSkippedMetric   prometheus.Counter
 }
 
 // CreateAndRegisterMetrics creates a struct of Prometheus Metrics
 func CreateAndRegisterMetrics() *Metrics {
 	metrics := Metrics{}
 
-	metrics.imagePostedMetric = prometheus.NewCounterVec(
+	metrics.imagePostedMetric = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "image_server_new_image_request_total",
 			Help: "Number of requested images",
 		},
-		nil,
 	)
 	prometheus.MustRegister(metrics.imagePostedMetric)
 
-	metrics.imagePostingFailedMetric = prometheus.NewCounterVec(
+	metrics.imagePostingFailedMetric = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "image_server_new_image_request_failed_total",
 			Help: "Number of failed requested images",
 		},
-		nil,
 	)
 	prometheus.MustRegister(metrics.imagePostingFailedMetric)
 
@@ -76,39 +74,35 @@ func CreateAndRegisterMetrics() *Metrics {
 	)
 	prometheus.MustRegister(metrics.allImagesAlreadyProcessedMetric)
 
-	metrics.sourceDownloadedMetric = prometheus.NewCounterVec(
+	metrics.sourceDownloadedMetric = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "image_server_fetch_source_downloaded_total",
 			Help: "Number of downloaded source images",
 		},
-		nil,
 	)
 	prometheus.MustRegister(metrics.sourceDownloadedMetric)
 
-	metrics.originalDownloadedMetric = prometheus.NewCounterVec(
+	metrics.originalDownloadedMetric = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "image_server_fetch_original_downloaded_total",
 			Help: "Number of downloaded original images",
 		},
-		nil,
 	)
 	prometheus.MustRegister(metrics.originalDownloadedMetric)
 
-	metrics.originalDownloadFailedMetric = prometheus.NewCounterVec(
+	metrics.originalDownloadFailedMetric = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "image_server_fetch_original_unavailable_total",
 			Help: "Number of unavailable downloaded original images",
 		},
-		nil,
 	)
 	prometheus.MustRegister(metrics.originalDownloadFailedMetric)
 
-	metrics.originalDownloadSkippedMetric = prometheus.NewCounterVec(
+	metrics.originalDownloadSkippedMetric = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Name: "image_server_fetch_original_download_skipped_total",
 			Help: "Number of skipped downloaded original images",
 		},
-		nil,
 	)
 	prometheus.MustRegister(metrics.originalDownloadSkippedMetric)
 

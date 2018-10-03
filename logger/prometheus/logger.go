@@ -21,12 +21,12 @@ func Enable() {
 
 // ImagePosted posts an image posted metric
 func (l *Logger) ImagePosted() {
-	l.metrics.imagePostedMetric.WithLabelValues().Inc()
+	l.metrics.imagePostedMetric.Inc()
 }
 
 // ImagePostingFailed posts an image posting failed metric
 func (l *Logger) ImagePostingFailed() {
-	l.metrics.imagePostingFailedMetric.WithLabelValues().Inc()
+	l.metrics.imagePostingFailedMetric.Inc()
 }
 
 // ImageProcessed posts an image processed metric
@@ -51,20 +51,20 @@ func (l *Logger) AllImagesAlreadyProcessed(namespace string, hash string, source
 
 // SourceDownloaded posts an source downloaded metric
 func (l *Logger) SourceDownloaded() {
-	l.metrics.sourceDownloadedMetric.WithLabelValues().Inc()
+	l.metrics.sourceDownloadedMetric.Inc()
 }
 
 // OriginalDownloaded posts an original downloaded metric
 func (l *Logger) OriginalDownloaded(source string, destination string) {
-	l.metrics.originalDownloadedMetric.WithLabelValues().Inc()
+	l.metrics.originalDownloadedMetric.Inc()
 }
 
 // OriginalDownloadFailed posts an original download failed metric
 func (l *Logger) OriginalDownloadFailed(source string) {
-	l.metrics.originalDownloadFailedMetric.WithLabelValues().Inc()
+	l.metrics.originalDownloadFailedMetric.Inc()
 }
 
 // OriginalDownloadSkipped posts an original download skipped metric
 func (l *Logger) OriginalDownloadSkipped(source string) {
-	l.metrics.originalDownloadSkippedMetric.WithLabelValues().Inc()
+	l.metrics.originalDownloadSkippedMetric.Inc()
 }
