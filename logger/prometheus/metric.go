@@ -4,73 +4,59 @@ package prometheus
 type Metric struct {
 	Name        string
 	Description string
-	Type        string
 	Args        []string
 }
 
 var imagePosted = &Metric{
-	Name:        "new_image_request",
+	Name:        "image_server_new_image_request_total",
 	Description: "Number of requested images",
-	Type:        "counter_vec",
 }
 
 var imagePostingFailed = &Metric{
-	Name:        "new_image_request_failed",
+	Name:        "image_server_new_image_request_failed_total",
 	Description: "Number of failed requested images",
-	Type:        "counter_vec",
 }
 
 var imageProcessed = &Metric{
-	Name:        "processing_version_ok",
+	Name:        "image_server_processing_version_ok_total",
 	Description: "Number of processed images",
-	Type:        "counter_vec",
 	Args:        []string{"ic_format"},
 }
 
 var imageAlreadyProcessed = &Metric{
-	Name:        "processing_version_noop",
+	Name:        "image_server_processing_version_noop_total",
 	Description: "Number of already processed images",
-	Type:        "counter_vec",
 	Args:        []string{"ic_format"},
 }
 
 var imageProcessedWithErrors = &Metric{
-	Name:        "processing_version_failed",
+	Name:        "image_server_processing_version_failed_total",
 	Description: "Number of failed processed images",
-	Type:        "counter_vec",
 	Args:        []string{"ic_format"},
 }
 
 var allImagesAlreadyProcessed = &Metric{
-	Name:        "processing_versions_noop",
+	Name:        "image_server_processing_versions_noop_total",
 	Description: "Number of already processed all images",
-	Type:        "counter_vec",
-	Args:        []string{"namespace", "hash", "source_url"},
+	Args:        []string{"namespace"},
 }
 
 var sourceDownloaded = &Metric{
-	Name:        "fetch_source_downloaded",
+	Name:        "image_server_fetch_source_downloaded_total",
 	Description: "Number of downloaded source images",
-	Type:        "counter_vec",
 }
 
 var originalDownloaded = &Metric{
-	Name:        "fetch_original_downloaded",
+	Name:        "image_server_fetch_original_downloaded_total",
 	Description: "Number of downloaded original images",
-	Type:        "counter_vec",
-	Args:        []string{"source", "destination"},
 }
 
 var originalDownloadFailed = &Metric{
-	Name:        "fetch_original_unavailable",
+	Name:        "image_server_fetch_original_unavailable_total",
 	Description: "Number of unavailable downloaded original images",
-	Type:        "counter_vec",
-	Args:        []string{"source"},
 }
 
 var originalDownloadSkipped = &Metric{
-	Name:        "fetch_original_download_skipped",
+	Name:        "image_server_fetch_original_download_skipped_total",
 	Description: "Number of skipped downloaded original images",
-	Type:        "counter_vec",
-	Args:        []string{"source"},
 }

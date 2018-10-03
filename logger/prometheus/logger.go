@@ -48,7 +48,7 @@ func (l *Logger) ImageProcessedWithErrors(ic *core.ImageConfiguration) {
 
 // AllImagesAlreadyProcessed posts an all images already processed metric
 func (l *Logger) AllImagesAlreadyProcessed(namespace string, hash string, sourceURL string) {
-	l.collector.allImagesAlreadyProcessedMetric.WithLabelValues(namespace, hash, sourceURL).Inc()
+	l.collector.allImagesAlreadyProcessedMetric.WithLabelValues(namespace).Inc()
 }
 
 // SourceDownloaded posts an source downloaded metric
@@ -58,15 +58,15 @@ func (l *Logger) SourceDownloaded() {
 
 // OriginalDownloaded posts an original downloaded metric
 func (l *Logger) OriginalDownloaded(source string, destination string) {
-	l.collector.originalDownloadedMetric.WithLabelValues(source, destination).Inc()
+	l.collector.originalDownloadedMetric.WithLabelValues().Inc()
 }
 
 // OriginalDownloadFailed posts an original download failed metric
 func (l *Logger) OriginalDownloadFailed(source string) {
-	l.collector.originalDownloadFailedMetric.WithLabelValues(source).Inc()
+	l.collector.originalDownloadFailedMetric.WithLabelValues().Inc()
 }
 
 // OriginalDownloadSkipped posts an original download skipped metric
 func (l *Logger) OriginalDownloadSkipped(source string) {
-	l.collector.originalDownloadSkippedMetric.WithLabelValues(source).Inc()
+	l.collector.originalDownloadSkippedMetric.WithLabelValues().Inc()
 }
