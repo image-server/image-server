@@ -23,73 +23,73 @@ func NewImageServerCollector() *ImageServerCollector {
 	return &ImageServerCollector{
 		imagePostedMetric: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: imagePosted.Name,
-				Help: imagePosted.Description,
+				Name: "image_server_new_image_request_total",
+				Help: "Number of requested images",
 			},
-			imagePosted.Args,
+			nil,
 		),
 		imagePostingFailedMetric: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: imagePostingFailed.Name,
-				Help: imagePostingFailed.Description,
+				Name: "image_server_new_image_request_failed_total",
+				Help: "Number of failed requested images",
 			},
-			imagePostingFailed.Args,
+			nil,
 		),
 		imageProcessedMetric: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: imageProcessed.Name,
-				Help: imageProcessed.Description,
+				Name: "image_server_processing_version_ok_total",
+				Help: "Number of processed images",
 			},
-			imageProcessed.Args,
+			[]string{"ic_format"},
 		),
 		imageAlreadyProcessedMetric: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: imageAlreadyProcessed.Name,
-				Help: imageAlreadyProcessed.Description,
+				Name: "image_server_processing_version_noop_total",
+				Help: "Number of already processed images",
 			},
-			imageAlreadyProcessed.Args,
+			[]string{"ic_format"},
 		),
 		imageProcessedWithErrorsMetric: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: imageProcessedWithErrors.Name,
-				Help: imageProcessedWithErrors.Description,
+				Name: "image_server_processing_version_failed_total",
+				Help: "Number of failed processed images",
 			},
-			imageProcessedWithErrors.Args,
+			[]string{"ic_format"},
 		),
 		allImagesAlreadyProcessedMetric: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: allImagesAlreadyProcessed.Name,
-				Help: allImagesAlreadyProcessed.Description,
+				Name: "image_server_processing_versions_noop_total",
+				Help: "Number of already processed all images",
 			},
-			allImagesAlreadyProcessed.Args,
+			[]string{"namespace"},
 		),
 		sourceDownloadedMetric: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: sourceDownloaded.Name,
-				Help: sourceDownloaded.Description,
+				Name: "image_server_fetch_source_downloaded_total",
+				Help: "Number of downloaded source images",
 			},
-			sourceDownloaded.Args,
+			nil,
 		),
 		originalDownloadedMetric: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: originalDownloaded.Name,
-				Help: originalDownloaded.Description,
+				Name: "image_server_fetch_original_downloaded_total",
+				Help: "Number of downloaded original images",
 			},
-			originalDownloaded.Args,
+			nil,
 		),
 		originalDownloadFailedMetric: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: originalDownloadFailed.Name,
-				Help: originalDownloadFailed.Description,
+				Name: "image_server_fetch_original_unavailable_total",
+				Help: "Number of unavailable downloaded original images",
 			},
-			originalDownloadFailed.Args,
+			nil,
 		),
 		originalDownloadSkippedMetric: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: originalDownloadSkipped.Name,
-				Help: originalDownloadSkipped.Description,
+				Name: "image_server_fetch_original_download_skipped_total",
+				Help: "Number of skipped downloaded original images",
 			},
-			originalDownloadSkipped.Args,
+			nil,
 		),
 	}
 }
