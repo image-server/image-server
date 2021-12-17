@@ -1,4 +1,4 @@
-FROM golang:1.9-alpine3.7
+FROM golang:1.17.5-alpine3.15
 
 LABEL maintainer="Thomas Barton"
 
