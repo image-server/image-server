@@ -11,11 +11,13 @@ An image needs to be uploaded to a namespace.
 Namespaces allow to group image types. For example avatars will require different image sizes than product images.
 
 Uploading an image requires a source, which is the URL of the original image.
+
 ```shell
 curl -X POST http://localhost:7000/p?source=http://example.com/image.jpg
 ```
 
 A binary file might be uploaded instead of providing an URL. The contents of the image need to be included in the body of the request.
+
 ```shell
 > curl --data-binary "@./test/images/wine.jpg" -X POST http://localhost:7000/p
 {
@@ -27,6 +29,7 @@ A binary file might be uploaded instead of providing an URL. The contents of the
 ```
 
 It is possible to process images when uploading an image by providing the desired image dimensions in the `outputs` parameter.
+
 ```shell
 > curl --data-binary "@./test/images/wine.jpg" -X POST http://localhost:7000/p?outputs=x300.jpg,x300.webp
 {
@@ -37,13 +40,14 @@ It is possible to process images when uploading an image by providing the desire
 }
 ```
 
-An upload request will block till all images have been created (various sizes) *and* uploaded (either manta or s3, configured in the app).
+An upload request will block till all images have been created (various sizes) _and_ uploaded to S3
 
 ### Image Information
 
-The request returns the *"Image Information"* after an image is uploaded. The response includes properties of the image, and the image hash to be used to retrieve it in the future.
+The request returns the _"Image Information"_ after an image is uploaded. The response includes properties of the image, and the image hash to be used to retrieve it in the future.
 
 Image properties can be retrieved by visiting the info page. The response is the same as the one returned when creating the image. Please note url has partitioned the image hash `/123/456/789/<REST_OF_HASH>/`
+
 ```shell
 > curl http://localhost:7000/p/6e0/072/682/e66287b662827da75b244a3/info.json
 {
@@ -65,7 +69,6 @@ Images can be processed on demand. This will re-size and also upload the image t
 
 ![Image](test/images/wine/w200.jpg?raw=true)
 
-
     Square
     GET http://localhost:7000/p/6e0/072/682/e66287b662827da75b244a3/x200.jpg
 
@@ -76,7 +79,6 @@ Images can be processed on demand. This will re-size and also upload the image t
 
 ![Image](test/images/wine/300x200.jpg?raw=true)
 
-
 **Quality**
 
 The default compression of the image can be modified by appending `-q` and the desired quality `1-100`.
@@ -86,19 +88,14 @@ The default compression of the image can be modified by appending `-q` and the d
 
 ![Image](test/images/wine/x200-q30.jpg?raw=true)
 
-
 ### Cloud Storage
 
-Images can be uploaded to either Amazon S3 or Joyent's Manta (we support only one upload config at a time)
+Images can be uploaded to either Amazon S3
 
 To store images in S3 the following flags need to be set
+
 ```shell
 --aws_access_key_id $AWS_ACCESS_KEY_ID --aws_secret_key $AWS_SECRET_KEY --aws_bucket $AWS_BUCKET --aws_region us-west-1
-```
-
-For Manta the following flags are required
-```shell
---manta_url $MANTA_URL --manta_user $MANTA_USER --manta_key_id $MANTA_KEY_ID --sdc_identity $SDC_IDENTITY --remote_base_path $IMG_MANTA_BASE_PATH
 ```
 
 ### Error Handling
@@ -110,11 +107,6 @@ Few errors will cause the server to return error pages
 ## CLI
 
 Images can be processed with the command line.
-
-Command for manta task:
-```shell
-image --remote_base_path public/images --outputs x300.webp,x300.jpg process $MANTA_INPUT_FILE
-```
 
 ## Development
 
@@ -132,6 +124,7 @@ Install dependencies:
 Go needs to be installed with cross compilation. Imagemagick will require giflib and webp support.
 
 On Mac
+
 ```bash
 brew install --force go --with-cc-all
 brew install --force giflib
@@ -141,7 +134,7 @@ make deps
 
 Set up editor:
 
-  - Atom.io package [go-plus](https://github.com/joefitzgerald/go-plus)
+- Atom.io package [go-plus](https://github.com/joefitzgerald/go-plus)
 
 Compile the app:
 
@@ -156,18 +149,15 @@ make build
 There are few `make` helpers that start the development server. They all translate environment variables into flags.
 
 ### S3
+
 Required ENV variables: `IMG_OUTPUTS`, `AWS_BUCKET`, `IMG_REMOTE_BASE_PATH`, `IMG_REMOTE_BASE_URL`
+
 ```
 make dev-server-s3
 ```
 
-### Manta
-Required ENV variables: `IMG_OUTPUTS`, `MANTA_URL`, `MANTA_USER`, `MANTA_KEY_ID`, `SDC_IDENTITY`, `IMG_MANTA_BASE_PATH`
-```
-make dev-server-manta
-```
-
 ### No uploader, only store images locally
+
 Required ENV variables: `IMG_OUTPUTS`
 
 ```bash
@@ -207,26 +197,31 @@ bin/images --enable_statsd
 ### Statsd Events
 
 A local cache was not found and the image was processed. This also tracks count of images sent to remote store.
+
 ```
 stats.image_server.image_request
 ```
 
 In addition, the format is tracked (jpg, gif, webp)
+
 ```
 stats.image_server.image_request.jpg
 ```
 
 Request failed to return an image
+
 ```
 stats.image_server.image_request_fail
 ```
 
 Every download from original source, and a 404 was returned
+
 ```
 stats.image_server.original_downloaded
 ```
 
 The original image is not available, and a 404 was returned
+
 ```
 stats.image_server.original_unavailable
 ```
@@ -234,7 +229,6 @@ stats.image_server.original_unavailable
 ## Prometheus metrics
 
 Prometheus metrics are available on the admin port at `/metrics`
-
 
 ## Profiling
 
@@ -251,11 +245,13 @@ It is important to run the profiler
 You will need the profiled data from the server, and analize it with the same executable file used on the server.
 
 You will need to download the profiled data from the server.
+
 ```
 ssh example.com "curl http://localhost:6060/debug/pprof/heap" > images.pprof
 ```
 
 Use `go tool pprof` to analize the profile. Remember to use the same executable file as the one on production.
+
 ```
 go tool pprof --inuse_objects bin/solaris/images images.pprof
 ```
@@ -271,11 +267,13 @@ $ sudo sysctl -w kern.ipc.somaxconn=2048
 Also need to increase the limit of maximum open files
 
 To find out the limits on your computer:
+
 ```shell
 launchctl limit
 ```
 
 Increase the limits!
+
 ```shell
 launchctl limit maxfiles 400000 1000000
 ```
