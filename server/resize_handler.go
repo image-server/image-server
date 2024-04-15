@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -30,6 +31,11 @@ func ResizeHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConf
 		return
 	}
 
+	if isFormatForbidden(ic.Format, sc) {
+		errorHandler(errors.New("Not Found"), w, req, http.StatusNotFound)
+		return
+	}
+
 	ic.ID = varsToHash(vars)
 	ic.Namespace = vars["namespace"]
 
@@ -56,4 +62,18 @@ func ResizeHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConf
 
 func varsToHash(vars map[string]string) string {
 	return fmt.Sprintf("%s%s%s%s", vars["id1"], vars["id2"], vars["id3"], vars["id4"])
+}
+
+func isFormatForbidden(format string, sc *core.ServerConfiguration) bool {
+	if format == "" || len(sc.AllowedExtensions) == 0 {
+		return false
+	}
+
+	for _, ext := range sc.AllowedExtensions {
+		if ext == format {
+			return false
+		}
+	}
+
+	return true
 }

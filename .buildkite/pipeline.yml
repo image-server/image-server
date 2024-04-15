@@ -1,5 +1,4 @@
 steps:
-  - label: "Build and Push Dockerfiles"
+  - label: "Build and Push Docker images"
     command:
-      - "docker build -t $REGISTRY_URI:$DOCKER_TAG --build-arg SHORT_COMMIT_HASH=$SHORT_COMMIT_HASH ."
-      - "docker push $REGISTRY_URI:$DOCKER_TAG"
+      - "build.sh"

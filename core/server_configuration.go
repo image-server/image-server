@@ -7,7 +7,7 @@ import (
 
 // ServerConfiguration struct
 type ServerConfiguration struct {
-	WhitelistedExtensions []string
+	AllowedExtensions []string
 	MaximumWidth          int
 	LocalBasePath         string
 	RemoteBasePath        string

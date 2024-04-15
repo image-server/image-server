@@ -121,8 +121,15 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 		}
 	}
 
+	var allowedExtensions = []string{}
+
+	// Need to check if the string is empty because strings.Split("") returns a slice with one element
+	if len(config.extensions) > 0 {
+		allowedExtensions = strings.Split(config.extensions, ",")
+	}
+
 	return &core.ServerConfiguration{
-		WhitelistedExtensions: strings.Split(config.extensions, ","),
+		AllowedExtensions: allowedExtensions,
 		LocalBasePath:         config.localBasePath,
 
 		MaximumWidth:   config.maximumWidth,
