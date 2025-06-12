@@ -8,6 +8,4 @@ SERVER_LISTEN=${SERVER_LISTEN:-0.0.0.0}
 REMOTE_BASE_URL=${REMOTE_BASE_URL:-https://s3-${AWS_REGION}.amazonaws.com/${AWS_S3_BUCKET}}
 
 mkdir -p /opt/image-server/public
-cp -r /opt/image-server/sample/* /opt/image-server/public
-rm -rf /opt/image-server/sample
 exec bin/image-server server --local_base_path ${LOCAL_BASE_PATH} --uploader ${UPLOADER} --aws_bucket ${AWS_S3_BUCKET} --aws_region ${AWS_REGION} --listen ${SERVER_LISTEN} --remote_base_url ${REMOTE_BASE_URL} --extensions "${ALLOWED_EXTENSIONS}" ${CUSTOM_FLAGS}
