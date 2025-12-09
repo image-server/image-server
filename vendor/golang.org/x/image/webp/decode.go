@@ -2,11 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package webp implements a decoder for WEBP images.
-//
-// WEBP is defined at:
-// https://developers.google.com/speed/webp/docs/riff_container
-package webp // import "golang.org/x/image/webp"
+package webp
 
 import (
 	"bytes"
@@ -18,7 +14,6 @@ import (
 	"golang.org/x/image/riff"
 	"golang.org/x/image/vp8"
 	"golang.org/x/image/vp8l"
-	"golang.org/x/image/webp/nycbcra"
 )
 
 var errInvalidFormat = errors.New("webp: invalid format")
@@ -44,6 +39,7 @@ func decode(r io.Reader, configOnly bool) (image.Image, image.Config, error) {
 		alpha          []byte
 		alphaStride    int
 		wantAlpha      bool
+		seenVP8X       bool
 		widthMinusOne  uint32
 		heightMinusOne uint32
 		buf            [10]byte
@@ -77,7 +73,7 @@ func decode(r io.Reader, configOnly bool) (image.Image, image.Config, error) {
 			unfilterAlpha(alpha, alphaStride, (buf[0]>>2)&0x03)
 
 		case fccVP8:
-			if wantAlpha {
+			if wantAlpha || int32(chunkLen) < 0 {
 				return nil, image.Config{}, errInvalidFormat
 			}
 			d := vp8.NewDecoder()
@@ -98,7 +94,7 @@ func decode(r io.Reader, configOnly bool) (image.Image, image.Config, error) {
 				return nil, image.Config{}, err
 			}
 			if alpha != nil {
-				return &nycbcra.Image{
+				return &image.NYCbCrA{
 					YCbCr:   *m,
 					A:       alpha,
 					AStride: alphaStride,
@@ -118,6 +114,10 @@ func decode(r io.Reader, configOnly bool) (image.Image, image.Config, error) {
 			return m, image.Config{}, err
 
 		case fccVP8X:
+			if seenVP8X {
+				return nil, image.Config{}, errInvalidFormat
+			}
+			seenVP8X = true
 			if chunkLen != 10 {
 				return nil, image.Config{}, errInvalidFormat
 			}
@@ -131,19 +131,23 @@ func decode(r io.Reader, configOnly bool) (image.Image, image.Config, error) {
 				alphaBit        = 1 << 4
 				iccProfileBit   = 1 << 5
 			)
-			if buf[0] != alphaBit {
-				return nil, image.Config{}, errors.New("webp: non-Alpha VP8X is not implemented")
-			}
+			wantAlpha = (buf[0] & alphaBit) != 0
 			widthMinusOne = uint32(buf[4]) | uint32(buf[5])<<8 | uint32(buf[6])<<16
 			heightMinusOne = uint32(buf[7]) | uint32(buf[8])<<8 | uint32(buf[9])<<16
 			if configOnly {
+				if wantAlpha {
+					return nil, image.Config{
+						ColorModel: color.NYCbCrAModel,
+						Width:      int(widthMinusOne) + 1,
+						Height:     int(heightMinusOne) + 1,
+					}, nil
+				}
 				return nil, image.Config{
-					ColorModel: nycbcra.ColorModel,
+					ColorModel: color.YCbCrModel,
 					Width:      int(widthMinusOne) + 1,
 					Height:     int(heightMinusOne) + 1,
 				}, nil
 			}
-			wantAlpha = true
 		}
 	}
 }
@@ -257,7 +261,7 @@ func Decode(r io.Reader) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
-	return m, err
+	return m, nil
 }
 
 // DecodeConfig returns the color model and dimensions of a WEBP image without

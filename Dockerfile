@@ -1,4 +1,4 @@
-FROM golang:alpine3.19
+FROM golang:1.25-alpine
 
 WORKDIR ${GOPATH}/src/github.com/image-server/image-server
 
@@ -10,7 +10,7 @@ ARG SHORT_COMMIT_HASH
 
 RUN go build -ldflags="-X github.com/image-server/image-server/core.BuildTimestamp=`date -u '+%Y-%m-%d_%I:%M:%S%p_%z'` -X github.com/image-server/image-server/core.GitHash=${SHORT_COMMIT_HASH}"
 
-FROM alpine:3.15
+FROM alpine:3.21
 
 RUN apk add --no-cache imagemagick
 RUN apk add --no-cache ca-certificates
