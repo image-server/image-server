@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/image-server/image-server/core"
+	"github.com/image-server/image-server/core/signature"
 	"github.com/image-server/image-server/fetcher/http"
 	"github.com/image-server/image-server/logger/prometheus"
 	"github.com/image-server/image-server/logger/statsd"
@@ -52,6 +53,12 @@ type configT struct {
 	profile      bool
 
 	version bool
+
+	// Signature validation
+	requireSignature        bool
+	requireSignatureForRead bool
+	signingSecretsFile      string
+	signatureMaxTTL         int
 }
 
 var config configT
@@ -119,9 +126,41 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 		allowedExtensions = strings.Split(config.extensions, ",")
 	}
 
+	// Build signature configuration
+	var sigConfig *signature.Config
+	if config.requireSignature {
+		var secrets []string
+		var err error
+
+		if config.signingSecretsFile != "" {
+			secrets, err = signature.LoadSecretsFromFile(config.signingSecretsFile)
+			if err != nil {
+				log.Fatalf("Failed to load signing secrets: %v", err)
+			}
+		}
+
+		if len(secrets) == 0 {
+			log.Fatal("Signature validation enabled but no secrets provided. Use --signing-secrets-file")
+		}
+
+		maxTTL := time.Duration(config.signatureMaxTTL) * time.Minute
+		if maxTTL == 0 {
+			maxTTL = time.Hour // Default to 1 hour
+		}
+
+		sigConfig = &signature.Config{
+			Enabled:         true,
+			RequireForReads: config.requireSignatureForRead,
+			Secrets:         secrets,
+			MaxTTL:          maxTTL,
+		}
+		log.Printf("Signature validation enabled (require for reads: %v, max TTL: %v, secrets count: %d)",
+			sigConfig.RequireForReads, sigConfig.MaxTTL, len(sigConfig.Secrets))
+	}
+
 	return &core.ServerConfiguration{
 		AllowedExtensions: allowedExtensions,
-		LocalBasePath:         config.localBasePath,
+		LocalBasePath:     config.localBasePath,
 
 		MaximumWidth:   config.maximumWidth,
 		RemoteBasePath: config.remoteBasePath,
@@ -140,6 +179,9 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 		DefaultQuality:      uint(config.defaultQuality),
 		UploaderConcurrency: uint(config.uploaderConcurrency),
 		HTTPTimeout:         httpTimeout,
+
+		// Signature validation
+		SignatureConfig: sigConfig,
 	}
 }
 

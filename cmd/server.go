@@ -85,6 +85,12 @@ func init() {
 	serverCmd.Flags().StringVar(&config.statsdPrefix, "statsd_prefix", "image_server.", "Statsd prefix")
 	serverCmd.Flags().BoolVar(&config.profile, "profile", false, "Enable pprof")
 	serverCmd.Flags().BoolVar(&config.enableStatsd, "enable_statsd", false, "Enable statsd metrics")
+
+	// Signature validation
+	serverCmd.Flags().BoolVar(&config.requireSignature, "require-signature", false, "Require signed URLs for uploads")
+	serverCmd.Flags().BoolVar(&config.requireSignatureForRead, "require-signature-for-reads", false, "Also require signed URLs for GET requests")
+	serverCmd.Flags().StringVar(&config.signingSecretsFile, "signing-secrets-file", "", "Path to file containing signing secrets (one per line)")
+	serverCmd.Flags().IntVar(&config.signatureMaxTTL, "signature-max-ttl", 60, "Maximum allowed signature TTL in minutes")
 }
 
 func handleShutdownSignals() {

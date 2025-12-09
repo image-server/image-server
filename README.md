@@ -1,25 +1,62 @@
 # Image Server
 
-[![Build Status](https://travis-ci.org/image-server/image-server.svg)](https://travis-ci.org/image-server/image-server)
+A high-performance image processing server written in Go. Supports on-demand image resizing, format conversion, and cloud storage integration.
+
+## Features
+
+- **On-demand image processing** - Resize, crop, and convert images via URL parameters
+- **Multiple output formats** - JPEG, WebP, GIF, PNG, HEIC/HEIF (iPhone images)
+- **Cloud storage** - Upload processed images to Amazon S3
+- **Signed URLs** - Secure uploads with HMAC-SHA256 signed URLs (similar to AWS S3 pre-signed URLs)
+- **Batch processing** - Process multiple image sizes in a single request
+- **Prometheus metrics** - Built-in metrics endpoint for monitoring
+- **Docker support** - Ready-to-use Docker image
+
+## Quick Start
+
+### Using Docker
+
+```bash
+docker build -t image-server .
+docker run -p 7000:7000 -p 7002:7002 image-server
+```
+
+### Building from Source
+
+Requires Go 1.21+ and libvips.
+
+```bash
+# macOS
+brew install vips
+
+# Ubuntu/Debian
+apt-get install libvips-dev
+
+# Build
+go build -o image-server .
+
+# Run
+./image-server server --port 7000
+```
 
 ## Server
 
-### Posting New Images
+### Uploading Images
 
-An image needs to be uploaded to a namespace.
+Images are uploaded to a namespace. Namespaces group image types (e.g., avatars vs product images may need different sizes).
 
-Namespaces allow to group image types. For example avatars will require different image sizes than product images.
-
-Uploading an image requires a source, which is the URL of the original image.
-
-```shell
-curl -X POST http://localhost:7000/p?source=http://example.com/image.jpg
+**Upload from URL:**
+```bash
+curl -X POST "http://localhost:7000/products?source=https://example.com/image.jpg"
 ```
 
-A binary file might be uploaded instead of providing an URL. The contents of the image need to be included in the body of the request.
+**Upload binary data:**
+```bash
+curl --data-binary "@./image.jpg" -X POST http://localhost:7000/products
+```
 
-```shell
-> curl --data-binary "@./test/images/wine.jpg" -X POST http://localhost:7000/p
+**Response:**
+```json
 {
   "hash": "6e0072682e66287b662827da75b244a3",
   "height": 600,
@@ -28,254 +65,273 @@ A binary file might be uploaded instead of providing an URL. The contents of the
 }
 ```
 
-It is possible to process images when uploading an image by providing the desired image dimensions in the `outputs` parameter.
-
-```shell
-> curl --data-binary "@./test/images/wine.jpg" -X POST http://localhost:7000/p?outputs=x300.jpg,x300.webp
-{
-  "hash": "6e0072682e66287b662827da75b244a3",
-  "height": 496,
-  "width": 574,
-  "content_type": "image/jpeg"
-}
+**Upload and process immediately:**
+```bash
+curl --data-binary "@./image.jpg" -X POST "http://localhost:7000/products?outputs=x300.jpg,x300.webp"
 ```
 
-An upload request will block till all images have been created (various sizes) _and_ uploaded to S3
+### Retrieving Images
+
+Images are accessed via their hash, partitioned into path segments:
+
+```
+GET http://localhost:7000/{namespace}/{hash[0:3]}/{hash[3:6]}/{hash[6:9]}/{hash[9:]}/{dimensions}.{format}
+```
+
+**Examples:**
+
+```bash
+# By width (maintains aspect ratio)
+GET http://localhost:7000/products/6e0/072/682/e66287b662827da75b244a3/w200.jpg
+
+# Square crop
+GET http://localhost:7000/products/6e0/072/682/e66287b662827da75b244a3/x200.jpg
+
+# Specific dimensions (width x height)
+GET http://localhost:7000/products/6e0/072/682/e66287b662827da75b244a3/300x200.jpg
+
+# With quality adjustment (1-100)
+GET http://localhost:7000/products/6e0/072/682/e66287b662827da75b244a3/x200-q50.jpg
+
+# WebP format
+GET http://localhost:7000/products/6e0/072/682/e66287b662827da75b244a3/x200.webp
+```
 
 ### Image Information
 
-The request returns the _"Image Information"_ after an image is uploaded. The response includes properties of the image, and the image hash to be used to retrieve it in the future.
-
-Image properties can be retrieved by visiting the info page. The response is the same as the one returned when creating the image. Please note url has partitioned the image hash `/123/456/789/<REST_OF_HASH>/`
-
-```shell
-> curl http://localhost:7000/p/6e0/072/682/e66287b662827da75b244a3/info.json
-{
-  "hash": "6e0072682e66287b662827da75b244a3",
-  "height": 496,
-  "width": 574,
-  "content_type": "image/jpeg"
-}
+```bash
+curl http://localhost:7000/products/6e0/072/682/e66287b662827da75b244a3/info.json
 ```
 
-### Image processing
+### Batch Processing
 
-Images can be processed on demand. This will re-size and also upload the image to the configured data store!
+Process multiple sizes for an existing image:
 
-**Dimensions**
-
-    By Width
-    GET http://localhost:7000/p/6e0/072/682/e66287b662827da75b244a3/w200.jpg
-
-![Image](test/images/wine/w200.jpg?raw=true)
-
-    Square
-    GET http://localhost:7000/p/6e0/072/682/e66287b662827da75b244a3/x200.jpg
-
-![Image](test/images/wine/x200.jpg?raw=true)
-
-    Rectangle (width x height)
-    GET http://localhost:7000/p/6e0/072/682/e66287b662827da75b244a3/300x200.jpg
-
-![Image](test/images/wine/300x200.jpg?raw=true)
-
-**Quality**
-
-The default compression of the image can be modified by appending `-q` and the desired quality `1-100`.
-
-    Square with quality 50
-    GET http://localhost:7000/p/6e0/072/682/e66287b662827da75b244a3/x200-q30.jpg
-
-![Image](test/images/wine/x200-q30.jpg?raw=true)
-
-### Cloud Storage
-
-Images can be uploaded to either Amazon S3
-
-To store images in S3 the following flags need to be set
-
-```shell
---aws_access_key_id $AWS_ACCESS_KEY_ID --aws_secret_key $AWS_SECRET_KEY --aws_bucket $AWS_BUCKET --aws_region us-west-1
+```bash
+curl -X POST "http://localhost:7000/products/6e0/072/682/e66287b662827da75b244a3/process?outputs=x100.jpg,x200.jpg,x300.webp"
 ```
 
-### Error Handling
+## Signed URLs (Authentication)
 
-Few errors will cause the server to return error pages
+Secure your image server by requiring signed URLs for uploads (and optionally reads). This works similarly to AWS S3 pre-signed URLs.
 
-- Source image is not found: NotFound (404)
+### Setup
 
-## CLI
+1. **Generate a signing secret:**
+   ```bash
+   ./image-server generate-secret > /etc/image-server/secrets.txt
+   ```
 
-Images can be processed with the command line.
+2. **Start the server with signature validation:**
+   ```bash
+   ./image-server server \
+     --require-signature \
+     --signing-secrets-file /etc/image-server/secrets.txt \
+     --signature-max-ttl 60
+   ```
+
+3. **Generate signed URLs in your backend application:**
+
+   The signature algorithm:
+   ```
+   StringToSign = METHOD + "\n" + PATH + "\n" + EXPIRES_UNIX_TIMESTAMP
+   Signature = Base64RawURL(HMAC-SHA256(secret, StringToSign))
+   ```
+
+   URL format:
+   ```
+   POST /namespace?X-Expires=1702156800&X-Path=/namespace&X-Signature=...
+   ```
+
+   Go example:
+   ```go
+   import "github.com/image-server/image-server/core/signature"
+
+   signer := signature.NewSigner("your-secret", "https://images.example.com")
+   url := signer.SignURL("POST", "/products", 15*time.Minute)
+   ```
+
+4. **Test with the CLI:**
+   ```bash
+   ./image-server sign-url \
+     --secret "your-secret" \
+     --base-url "https://images.example.com" \
+     --method POST \
+     --path /products \
+     --ttl 15m
+   ```
+
+### Configuration Options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--require-signature` | Enable signature validation for uploads | `false` |
+| `--require-signature-for-reads` | Also require signatures for GET requests | `false` |
+| `--signing-secrets-file` | Path to file with secrets (one per line) | - |
+| `--signature-max-ttl` | Maximum allowed TTL in minutes | `60` |
+
+### Secret Rotation
+
+The secrets file supports multiple secrets for rotation. Add new secrets to the top of the file:
+
+```
+new-secret-abc123
+old-secret-xyz789
+```
+
+The server validates against all secrets, so you can:
+1. Add the new secret
+2. Update your backend apps to use it
+3. Remove the old secret after existing URLs expire
+
+### Path-Based Signing
+
+Sign a path prefix to allow uploads to any path under it:
+
+```bash
+# Sign for entire namespace
+./image-server sign-url --secret "..." --path /products --ttl 15m
+# Allows: POST /products, POST /products/abc/def/...
+
+# Sign for specific path only
+./image-server sign-url --secret "..." --path /products/abc/def/ghi/jkl --ttl 15m
+# Allows only that exact path
+```
+
+## Cloud Storage (S3)
+
+```bash
+./image-server server \
+  --uploader s3 \
+  --aws_access_key_id $AWS_ACCESS_KEY_ID \
+  --aws_secret_key $AWS_SECRET_KEY \
+  --aws_bucket $AWS_BUCKET \
+  --aws_region us-west-1 \
+  --remote_base_path "images/" \
+  --remote_base_url "https://cdn.example.com"
+```
+
+## Server Configuration
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--port` | Server port | `7000` |
+| `--listen` | Listen address | `127.0.0.1` |
+| `--local_base_path` | Local image storage directory | `public` |
+| `--extensions` | Allowed file extensions | `jpg,gif,webp` |
+| `--maximum_width` | Maximum output width | `1000` |
+| `--default_quality` | Default JPEG/WebP quality | `75` |
+| `--outputs` | Default output formats | - |
+| `--uploader` | Storage backend (`s3` or `noop`) | auto |
+| `--uploader_concurrency` | Parallel upload workers | `10` |
+| `--processor_concurrency` | Parallel processing workers | `4` |
+| `--http_timeout` | HTTP request timeout (seconds) | `5` |
+| `--max_file_age` | Local file cleanup age (minutes) | `30` |
+
+## Admin Server
+
+A separate admin server runs on port 7002 with health and metrics endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `/probe/ready` | Readiness check |
+| `/probe/live` | Liveness check |
+| `/metrics` | Prometheus metrics |
+
+## CLI Commands
+
+### Process images locally
+
+```bash
+./image-server cli /path/to/images --outputs "x300.jpg,x300.webp"
+```
+
+### Generate signing secret
+
+```bash
+./image-server generate-secret
+./image-server generate-secret --length 64 --count 3
+```
+
+### Generate signed URL
+
+```bash
+./image-server sign-url --secret "..." --path /namespace --ttl 15m
+```
+
+### Version
+
+```bash
+./image-server version
+```
+
+## Monitoring
+
+### Prometheus Metrics
+
+Available at `http://localhost:7002/metrics`
+
+### Statsd
+
+```bash
+./image-server server --enable_statsd --statsd_host 127.0.0.1 --statsd_port 8125
+```
+
+Events:
+- `image_server.image_request` - Image processed and uploaded
+- `image_server.image_request.{format}` - By format (jpg, webp, etc.)
+- `image_server.image_request_fail` - Processing failed
+- `image_server.original_downloaded` - Original fetched from source
+- `image_server.original_unavailable` - Original not found (404)
+
+### Profiling
+
+```bash
+./image-server server --profile
+# pprof available at http://localhost:6060
+```
 
 ## Development
 
-Set up the environment:
+### Running locally
 
 ```bash
-mkdir -p $GOPATH/src/github.com/image-server/
-git clone https://github.com/image-server/image-server $GOPATH/src/github.com/image-server/image-server
-ln -s $GOPATH/src/github.com/image-server/image-server ~/workspace/image-server
-cd ~/workspace/image-server
-```
+# Without S3
+make dev-server
 
-Install dependencies:
-
-Go needs to be installed with cross compilation. Imagemagick will require giflib and webp support.
-
-On Mac
-
-```bash
-brew install --force go --with-cc-all
-brew install --force giflib
-brew install --force imagemagick --with-webp
-make deps
-```
-
-Set up editor:
-
-- Atom.io package [go-plus](https://github.com/joefitzgerald/go-plus)
-
-Compile the app:
-
-To build the executables under `./bin`
-
-```bash
-make build
-```
-
-## Development Usage
-
-There are few `make` helpers that start the development server. They all translate environment variables into flags.
-
-### S3
-
-Required ENV variables: `IMG_OUTPUTS`, `AWS_BUCKET`, `IMG_REMOTE_BASE_PATH`, `IMG_REMOTE_BASE_URL`
-
-```
+# With S3
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_KEY=...
+export AWS_BUCKET=...
+export AWS_REGION=...
+export IMG_REMOTE_BASE_PATH=...
+export IMG_REMOTE_BASE_URL=...
 make dev-server-s3
 ```
 
-### No uploader, only store images locally
-
-Required ENV variables: `IMG_OUTPUTS`
+### Tests
 
 ```bash
-make dev-server
+make test
+# or
+go test ./...
 ```
 
-## Tests
-
-S3 tests make real HTTP calls when you have S3 ENV variables set.
-
-```
-make tests
-```
-
-## Configuration
-
-All configuration is passed by flags
-
-go run main.go --help
-
-## Deploy
-
-Make sure you increase the version number in core/version.go
+### Building
 
 ```bash
-make release
+make build
+# Creates binaries in bin/ for multiple platforms
 ```
 
-## Statsd
+## Error Handling
 
-To enable the statsd events, use the flag `enable_statsd`:
+| Status | Description |
+|--------|-------------|
+| 401 | Invalid or missing signature (when signatures required) |
+| 404 | Image not found |
+| 400 | Invalid request parameters |
 
-```
-bin/images --enable_statsd
-```
+## License
 
-### Statsd Events
-
-A local cache was not found and the image was processed. This also tracks count of images sent to remote store.
-
-```
-stats.image_server.image_request
-```
-
-In addition, the format is tracked (jpg, gif, webp)
-
-```
-stats.image_server.image_request.jpg
-```
-
-Request failed to return an image
-
-```
-stats.image_server.image_request_fail
-```
-
-Every download from original source, and a 404 was returned
-
-```
-stats.image_server.original_downloaded
-```
-
-The original image is not available, and a 404 was returned
-
-```
-stats.image_server.original_unavailable
-```
-
-## Prometheus metrics
-
-Prometheus metrics are available on the admin port at `/metrics`
-
-## Profiling
-
-The server allows to be profiled when started with the profile flag
-
-```
-bin/images --profile server
-```
-
-The profiling information is available on `localhost:6060`
-
-It is important to run the profiler
-
-You will need the profiled data from the server, and analize it with the same executable file used on the server.
-
-You will need to download the profiled data from the server.
-
-```
-ssh example.com "curl http://localhost:6060/debug/pprof/heap" > images.pprof
-```
-
-Use `go tool pprof` to analize the profile. Remember to use the same executable file as the one on production.
-
-```
-go tool pprof --inuse_objects bin/solaris/images images.pprof
-```
-
-## Benchmarks
-
-Make sure your computer can handle enough simultaneous connections. MacOS X by default allows 128. Need a lot more!
-
-```shell
-$ sudo sysctl -w kern.ipc.somaxconn=2048
-```
-
-Also need to increase the limit of maximum open files
-
-To find out the limits on your computer:
-
-```shell
-launchctl limit
-```
-
-Increase the limits!
-
-```shell
-launchctl limit maxfiles 400000 1000000
-```
-
-to increase them [permanently](https://coderwall.com/p/lfjoaq)
+MIT
