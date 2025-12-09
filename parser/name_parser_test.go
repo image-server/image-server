@@ -53,7 +53,7 @@ func TestFullSize(t *testing.T) {
 
 func TestUnsupported(t *testing.T) {
 	ic, _ := NameToConfiguration(sc, "random.jpg")
-	ensureImageConfiguration(t, ic, 0, 0, 0, "")
+	ensureImageConfiguration(t, ic, 0, 0, 0, "jpg")
 }
 
 // Quality is Provided

@@ -1,10 +1,15 @@
 package statsd
 
-import "time"
+import (
+	"time"
+
+	"github.com/quipo/statsd/event"
+)
 
 // Statsd is an interface to a StatsD client (buffered/unbuffered)
 type Statsd interface {
 	CreateSocket() error
+	CreateTCPSocket() error
 	Close() error
 	Incr(stat string, count int64) error
 	Decr(stat string, count int64) error
@@ -18,4 +23,6 @@ type Statsd interface {
 	FGauge(stat string, value float64) error
 	FGaugeDelta(stat string, value float64) error
 	FAbsolute(stat string, value float64) error
+
+	SendEvents(events map[string]event.Event) error
 }
