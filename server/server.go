@@ -17,6 +17,12 @@ func InitializeServer(sc *core.ServerConfiguration, listen string, port string) 
 	log.Printf("starting server on http://%s:%s", listen, port)
 	router := NewRouter(sc)
 	n := negroni.Classic()
+
+	// Add signature validation middleware if enabled
+	if sc.SignatureConfig != nil && sc.SignatureConfig.Enabled {
+		n.Use(NewSignatureMiddleware(sc.SignatureConfig))
+	}
+
 	n.UseHandler(router)
 	graceful.Run(listen+":"+port, 30*time.Second, n)
 }
