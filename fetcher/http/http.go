@@ -10,8 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/golang/glog"
 )
 
 type Fetcher struct{}
@@ -45,15 +43,14 @@ func (f *Fetcher) Fetch(url string, destination string) error {
 			return fmt.Errorf("Unable to download image: %s, status code: %d", url, resp.StatusCode)
 		}
 
-		glog.Infof("Downloaded from %s with code %d", url, resp.StatusCode)
+		log.Printf("Downloaded from %s with code %d", url, resp.StatusCode)
 
 		dir := filepath.Dir(destination)
 		os.MkdirAll(dir, 0700)
 
 		out, err := os.Create(destination)
 		if err != nil {
-			glog.Infof("Unable to create file: %s", destination)
-			log.Println(err)
+			log.Printf("Unable to create file: %s - %v", destination, err)
 			return fmt.Errorf("Unable to create file: %s", destination)
 		}
 		defer out.Close()
@@ -70,9 +67,9 @@ func (f *Fetcher) Fetch(url string, destination string) error {
 			return errors.New("File is empty")
 		}
 
-		glog.Infof("Took %s to download image: %s", time.Since(start), destination)
+		log.Printf("Took %s to download image: %s", time.Since(start), destination)
 	} else {
-		glog.Infof("Fetcher: image is already present on destination: %s", destination)
+		log.Printf("Fetcher: image is already present on destination: %s", destination)
 	}
 	return nil
 }

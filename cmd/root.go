@@ -9,7 +9,6 @@ import (
 
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/fetcher/http"
-	"github.com/image-server/image-server/logger/logfile"
 	"github.com/image-server/image-server/logger/prometheus"
 	"github.com/image-server/image-server/logger/statsd"
 	"github.com/image-server/image-server/paths"
@@ -78,7 +77,6 @@ func serverConfiguration() (*core.ServerConfiguration, error) {
 		statsd.Enable(config.statsdHost, config.statsdPort, config.statsdPrefix)
 	}
 	prometheus.Enable()
-	logfile.Enable()
 
 	adapters := &core.Adapters{
 		Fetcher: &http.Fetcher{},

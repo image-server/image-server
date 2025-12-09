@@ -2,16 +2,17 @@ package s3
 
 import (
 	"context"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/golang/glog"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 )
 
 // Uploader for S3
@@ -54,7 +55,7 @@ func (u *Uploader) Upload(source string, destination string, contType string) er
 		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == request.CanceledErrorCode {
 			// If the SDK can determine the request or retry delay was canceled
 			// by a context the CanceledErrorCode error code will be returned.
-			glog.Infof("AWS S3 upload canceled due to timeout destination: %s, Error: %v\n", destination, err)
+			log.Printf("AWS S3 upload canceled due to timeout destination: %s, Error: %v\n", destination, err)
 		}
 	}
 

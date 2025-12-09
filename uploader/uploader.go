@@ -2,9 +2,9 @@ package uploader
 
 import (
 	"errors"
+	"log"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/uploader/noop"
 	"github.com/image-server/image-server/uploader/s3"
@@ -40,7 +40,7 @@ func (u *Uploader) Upload(source string, destination string, contType string) er
 
 	err := u.Uploader.Upload(source, destination, contType)
 	elapsed := time.Since(start)
-	glog.Infof("Took %s to upload image: %s", elapsed, destination)
+	log.Printf("Took %s to upload image: %s", elapsed, destination)
 	return err
 }
 
@@ -52,7 +52,7 @@ func (u *Uploader) CreateDirectory(path string) error {
 	start := time.Now()
 	directoryPath := u.Uploader.CreateDirectory(path)
 	elapsed := time.Since(start)
-	glog.Infof("Took %s to generate remote directory: %s", elapsed, path)
+	log.Printf("Took %s to generate remote directory: %s", elapsed, path)
 	return directoryPath
 }
 

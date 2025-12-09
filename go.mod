@@ -4,7 +4,6 @@ go 1.24.4
 
 require (
 	github.com/aws/aws-sdk-go v1.55.8
-	github.com/golang/glog v1.2.5
 	github.com/gorilla/mux v1.8.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.23.2
