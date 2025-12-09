@@ -36,7 +36,7 @@ func SupportedFormat(format string) bool {
 // SupportedInputFormat returns true if vips can read this input format
 func SupportedInputFormat(contentType string) bool {
 	switch contentType {
-	case "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf":
+	case "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "image/heic", "image/heif":
 		return true
 	default:
 		return false

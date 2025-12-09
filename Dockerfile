@@ -16,8 +16,8 @@ RUN go build -ldflags="-X github.com/image-server/image-server/core.BuildTimesta
 
 FROM alpine:3.21
 
-# Install vips for image processing (includes poppler for PDF support)
-RUN apk add --no-cache vips vips-poppler
+# Install vips for image processing (poppler for PDF, heif for iPhone images)
+RUN apk add --no-cache vips vips-poppler vips-heif
 RUN apk add --no-cache ca-certificates
 
 WORKDIR /opt/image-server
