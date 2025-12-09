@@ -1,8 +1,12 @@
 FROM golang:1.25-alpine
 
+# Install build dependencies for govips (CGO)
+RUN apk add --no-cache build-base vips-dev pkgconfig
+
 WORKDIR ${GOPATH}/src/github.com/image-server/image-server
 
 ENV GO111MODULE=auto
+ENV CGO_ENABLED=1
 
 COPY . .
 
@@ -12,7 +16,8 @@ RUN go build -ldflags="-X github.com/image-server/image-server/core.BuildTimesta
 
 FROM alpine:3.21
 
-RUN apk add --no-cache imagemagick
+# Install vips for image processing (includes poppler for PDF support)
+RUN apk add --no-cache vips vips-poppler
 RUN apk add --no-cache ca-certificates
 
 WORKDIR /opt/image-server

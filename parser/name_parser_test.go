@@ -77,3 +77,30 @@ func TestFullSizeWithQuality(t *testing.T) {
 	ic, _ := NameToConfiguration(sc, "full_size-q10.jpg")
 	ensureImageConfiguration(t, ic, 0, 0, 10, "jpg")
 }
+
+// Without extension (defaults to jpg)
+
+func TestRectangleNoExtension(t *testing.T) {
+	ic, _ := NameToConfiguration(sc, "512x512")
+	ensureImageConfiguration(t, ic, 512, 512, 75, "jpg")
+}
+
+func TestSquareNoExtension(t *testing.T) {
+	ic, _ := NameToConfiguration(sc, "x300")
+	ensureImageConfiguration(t, ic, 300, 300, 75, "jpg")
+}
+
+func TestWidthNoExtension(t *testing.T) {
+	ic, _ := NameToConfiguration(sc, "w300")
+	ensureImageConfiguration(t, ic, 300, 0, 75, "jpg")
+}
+
+func TestFullSizeNoExtension(t *testing.T) {
+	ic, _ := NameToConfiguration(sc, "full_size")
+	ensureImageConfiguration(t, ic, 0, 0, 75, "jpg")
+}
+
+func TestRectangleNoExtensionWithQuality(t *testing.T) {
+	ic, _ := NameToConfiguration(sc, "300x400-q50")
+	ensureImageConfiguration(t, ic, 300, 400, 50, "jpg")
+}
