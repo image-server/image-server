@@ -60,7 +60,7 @@ func init() {
 	serverCmd.Flags().StringVar(&config.remoteBasePath, "remote_base_path", "", "base path for cloud storage")
 
 	// Uploader
-	serverCmd.Flags().StringVar(&config.uploaderType, "uploader", "", "Uploader ['s3', 'manta', 'noop']")
+	serverCmd.Flags().StringVar(&config.uploaderType, "uploader", "", "Uploader ['s3', 'noop']")
 	serverCmd.Flags().IntVar(&config.maxFileAge, "max_file_age", 30, "Max file age in minutes")
 
 	// S3 uploader
@@ -68,12 +68,6 @@ func init() {
 	serverCmd.Flags().StringVar(&config.awsSecretKey, "aws_secret_key", "", "S3 Secret")
 	serverCmd.Flags().StringVar(&config.awsBucket, "aws_bucket", "", "S3 Bucket")
 	serverCmd.Flags().StringVar(&config.awsRegion, "aws_region", "", "S3 Region")
-
-	// Manta uploader
-	serverCmd.Flags().StringVar(&config.mantaURL, "manta_url", "", "URL of Manta endpoint. https://us-east.manta.joyent.com")
-	serverCmd.Flags().StringVar(&config.mantaUser, "manta_user", "", "The account name")
-	serverCmd.Flags().StringVar(&config.mantaKeyID, "manta_key_id", "", "The fingerprint of the account or user SSH public key. Example: $(ssh-keygen -l -f $HOME/.ssh/id_rsa.pub | awk '{print $2}')")
-	serverCmd.Flags().StringVar(&config.sdcIdentity, "sdc_identity", "", "Example: $HOME/.ssh/id_rsa")
 
 	// Default image settings
 	serverCmd.Flags().IntVar(&config.maximumWidth, "maximum_width", 1000, "Maximum image width")

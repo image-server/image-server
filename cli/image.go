@@ -12,7 +12,6 @@ import (
 	"github.com/image-server/image-server/processor"
 
 	"github.com/image-server/image-server/uploader"
-	mantaclient "github.com/image-server/image-server/uploader/manta/client"
 )
 
 var pathHashRegex *regexp.Regexp
@@ -33,7 +32,7 @@ type ImageUpload struct {
 func (iu *ImageUpload) Upload() error {
 	uploader := uploader.DefaultUploader(iu.ServerConfiguration)
 	remoteResizedPath := iu.ServerConfiguration.Adapters.Paths.RemoteImagePath(iu.Namespace, iu.Hash, iu.Filename)
-	glog.Infof("uploading %s to manta: %s", iu.LocalPath, remoteResizedPath)
+	glog.Infof("uploading %s to remote: %s", iu.LocalPath, remoteResizedPath)
 	err := uploader.Upload(iu.LocalPath, remoteResizedPath, iu.ContentType)
 	if err != nil {
 		log.Println(err)
@@ -58,47 +57,9 @@ func NewImageProcessor(namespace string, path string, outputs []string) *ImagePr
 	}
 }
 
-func (ip *ImageProcessor) calculateMissingOutputs(sc *core.ServerConfiguration) ([]string, map[string]mantaclient.Entry, error) {
-	// Determine what versions need to be generated
-	var itemOutputs []string
-	c := mantaclient.DefaultClient()
-	c.HTTPTimeout = sc.HTTPTimeout
-	m := make(map[string]mantaclient.Entry)
-	remoteDirectory := sc.Adapters.Paths.RemoteImageDirectory(ip.Namespace, ip.Image.Hash)
-	entries, err := c.ListDirectory(remoteDirectory)
-	if err == nil {
-
-		for _, entry := range entries {
-			if entry.Type == "object" {
-				m[entry.Name] = entry
-			} else {
-				// got a directory
-			}
-		}
-
-		for _, output := range ip.Outputs {
-			if _, ok := m[output]; ok {
-				glog.Infof("Skipping %s/%s", remoteDirectory, output)
-			} else {
-				itemOutputs = append(itemOutputs, output)
-			}
-		}
-
-	} else {
-		return nil, nil, err
-	}
-
-	return itemOutputs, m, nil
-}
-
-// ProcessMissing processes images missing in the remote server
+// ProcessMissing processes all requested outputs
 func (ip *ImageProcessor) ProcessMissing(sc *core.ServerConfiguration) error {
-	missingOutputs, _, err := ip.calculateMissingOutputs(sc)
-	if err != nil {
-		return err
-	}
-
-	for _, filename := range missingOutputs {
+	for _, filename := range ip.Outputs {
 		err := ip.ProcessOutput(sc, filename)
 		if err != nil {
 			return err
@@ -117,7 +78,7 @@ func (ip *ImageProcessor) ProcessOutput(sc *core.ServerConfiguration, filename s
 	}()
 
 	// when Image.ProcessOutput puts something on the channel, take that info
-	// and run it through ImageUpload to get it into manta
+	// and run it through ImageUpload to upload it
 	select {
 	case localImagePath := <-ip.channel:
 		// Hash                string

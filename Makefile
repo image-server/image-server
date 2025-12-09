@@ -68,14 +68,6 @@ build-docker:
 run-docker:
 	docker run -p 7000:7000 -p 7002:7002 image-server
 
-release: test build
-  # Mac
-	@mput -f bin/darwin/images-$(VERSION) /$(MANTA_USER)/public/images/bin/images-darwin-$(VERSION)
-	@echo "$(VERSION)" | mput -H 'content-type: text/plain' /$(MANTA_USER)/public/images/bin/images-darwin-version
-  # Linux
-	@mput -f bin/linux/images-$(VERSION) /$(MANTA_USER)/public/images/bin/images-linux-$(VERSION)
-	@echo "$(VERSION)" | mput -H 'content-type: text/plain' /$(MANTA_USER)/public/images/bin/images-linux-version
-
 fmt:
 	gofmt -w $(GOFMT_FILES)
 	

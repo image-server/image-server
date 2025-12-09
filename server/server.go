@@ -41,14 +41,6 @@ func NewRouter(sc *core.ServerConfiguration) *mux.Router {
 		NewFileHandler(wr, req, sc)
 	}).Methods("POST").Name("newFile")
 
-	router.HandleFunc("/{namespace:[a-z0-9_-]+}/batch", func(wr http.ResponseWriter, req *http.Request) {
-		CreateBatchHandler(wr, req, sc)
-	}).Methods("POST").Name("createBatch")
-
-	router.HandleFunc("/{namespace:[a-z0-9_-]+}/batch/{uuid:[a-f0-9-]{36}}", func(wr http.ResponseWriter, req *http.Request) {
-		BatchHandler(wr, req, sc)
-	}).Methods("GET").Name("batch")
-
 	admin := &AdminHandler{}
 	router.HandleFunc("/status_check", admin.ServeHTTP)
 	return router
