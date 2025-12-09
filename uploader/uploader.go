@@ -6,7 +6,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/image-server/image-server/core"
-	"github.com/image-server/image-server/uploader/manta"
 	"github.com/image-server/image-server/uploader/noop"
 	"github.com/image-server/image-server/uploader/s3"
 )
@@ -26,8 +25,6 @@ func DefaultUploader(sc *core.ServerConfiguration) *Uploader {
 
 	if sc.UploaderIsAws() {
 		u.Uploader = &s3.Uploader{}
-	} else if sc.UploaderIsManta() {
-		u.Uploader = manta.DefaultUploader()
 	} else {
 		u.Uploader = &noop.Uploader{}
 	}
@@ -62,8 +59,6 @@ func (u *Uploader) CreateDirectory(path string) error {
 func Initialize(sc *core.ServerConfiguration) error {
 	if sc.UploaderIsAws() {
 		s3.Initialize(sc.AWSBucket, sc.AWSRegion)
-	} else if sc.UploaderIsManta() {
-		manta.Initialize(sc.RemoteBasePath, sc.MantaURL, sc.MantaUser, sc.MantaKeyID, sc.SDCIdentity)
 	}
 	return nil
 }

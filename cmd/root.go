@@ -38,11 +38,6 @@ type configT struct {
 	awsBucket      string
 	awsRegion      string
 
-	mantaURL    string
-	mantaUser   string
-	mantaKeyID  string
-	sdcIdentity string
-
 	maximumWidth   int
 	defaultQuality int
 
@@ -114,8 +109,6 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 	} else {
 		if config.awsAccessKeyID != "" {
 			uploader = "s3"
-		} else if config.mantaKeyID != "" {
-			uploader = "manta"
 		} else {
 			uploader = "noop"
 		}
@@ -144,12 +137,6 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 		AWSSecretKey:   config.awsSecretKey,
 		AWSBucket:      config.awsBucket,
 		AWSRegion:      config.awsRegion,
-
-		// Manta specific
-		MantaURL:    config.mantaURL,
-		MantaUser:   config.mantaUser,
-		MantaKeyID:  config.mantaKeyID,
-		SDCIdentity: config.sdcIdentity,
 
 		Outputs:             config.outputs,
 		DefaultQuality:      uint(config.defaultQuality),

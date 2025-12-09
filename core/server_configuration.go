@@ -22,10 +22,6 @@ type ServerConfiguration struct {
 	AWSSecretKey          string
 	AWSBucket             string
 	AWSRegion             string
-	MantaURL              string
-	MantaUser             string
-	MantaKeyID            string
-	SDCIdentity           string
 	UploaderType          string
 	CleanUpTicker         *time.Ticker
 	MaxFileAge            time.Duration
@@ -34,14 +30,6 @@ type ServerConfiguration struct {
 func (sc *ServerConfiguration) UploaderIsAws() bool {
 	uploader := strings.ToLower(sc.UploaderType)
 	if uploader == "aws" || uploader == "s3" {
-		return true
-	}
-	return false
-}
-
-func (sc *ServerConfiguration) UploaderIsManta() bool {
-	uploader := strings.ToLower(sc.UploaderType)
-	if uploader == "manta" {
 		return true
 	}
 	return false
