@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/info"
 	"github.com/image-server/image-server/logger"
@@ -105,7 +104,7 @@ func (p *Processor) createIfNotAvailable() (bool, error) {
 		}
 
 		elapsed := time.Since(start)
-		glog.Infof("Took %s to generate image: %s", elapsed, p.Destination)
+		log.Printf("Took %s to generate image: %s", elapsed, p.Destination)
 		return true, nil
 	} else {
 		return false, nil

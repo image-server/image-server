@@ -1,11 +1,11 @@
 package server
 
 import (
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/gorilla/mux"
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/info"
@@ -45,7 +45,7 @@ func NewImageHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerCo
 	imageDetails, err := request.Create()
 	if err != nil {
 		go logger.ImagePostingFailed()
-		glog.Error("Failed to create image from ", sourceURL, " - ", err)
+		log.Println("Failed to create image from", sourceURL, "-", err)
 		errorHandlerJSON(err, w, http.StatusNotFound)
 		return
 	}

@@ -1,7 +1,8 @@
 package request
 
 import (
-	"github.com/golang/glog"
+	"log"
+
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/fetcher"
 	"github.com/image-server/image-server/info"
@@ -64,11 +65,11 @@ func (r *Request) processImage(ic *core.ImageConfiguration) error {
 
 	select {
 	case <-pchan.ImageProcessed:
-		glog.Infof("Processed (resize handler) %s", localResizedPath)
+		log.Printf("Processed (resize handler) %s", localResizedPath)
 		go r.uploadResizedImage(localResizedPath, ic)
 
 	case <-pchan.Skipped:
-		glog.Infof("Skipped processing (resize handler) %s", localResizedPath)
+		log.Printf("Skipped processing (resize handler) %s", localResizedPath)
 	}
 
 	return nil
@@ -79,7 +80,7 @@ func (r *Request) uploadResizedImage(localResizedPath string, ic *core.ImageConf
 	err = r.Uploader.Upload(localResizedPath, remoteResizedPath, ic.ToContentType())
 
 	if err != nil {
-		glog.Errorln("Unable to upload file", remoteResizedPath, err)
+		log.Println("Unable to upload file", remoteResizedPath, err)
 		return err
 	}
 	return nil

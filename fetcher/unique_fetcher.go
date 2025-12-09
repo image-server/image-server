@@ -1,10 +1,10 @@
 package fetcher
 
 import (
+	"log"
 	"os"
 	"path/filepath"
 
-	"github.com/golang/glog"
 	httpFetcher "github.com/image-server/image-server/fetcher/http"
 )
 
@@ -59,10 +59,10 @@ func (f *UniqueFetcher) uniqueFetch(c chan FetchResult) {
 
 		mu.Lock()
 		if err == nil {
-			glog.Infof("Notifying download complete for path %s", destination)
+			log.Printf("Notifying download complete for path %s", destination)
 			f.notifyDownloadComplete(url)
 		} else {
-			glog.Infof("Unable to download image %s", err)
+			log.Printf("Unable to download image %s", err)
 			f.notifyDownloadFailed(url, err)
 		}
 		mu.Unlock()

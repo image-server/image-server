@@ -6,11 +6,9 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/golang/glog"
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/parser"
 	"github.com/image-server/image-server/processor"
-
 	"github.com/image-server/image-server/uploader"
 )
 
@@ -32,7 +30,7 @@ type ImageUpload struct {
 func (iu *ImageUpload) Upload() error {
 	uploader := uploader.DefaultUploader(iu.ServerConfiguration)
 	remoteResizedPath := iu.ServerConfiguration.Adapters.Paths.RemoteImagePath(iu.Namespace, iu.Hash, iu.Filename)
-	glog.Infof("uploading %s to remote: %s", iu.LocalPath, remoteResizedPath)
+	log.Printf("uploading %s to remote: %s", iu.LocalPath, remoteResizedPath)
 	err := uploader.Upload(iu.LocalPath, remoteResizedPath, iu.ContentType)
 	if err != nil {
 		log.Println(err)

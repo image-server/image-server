@@ -1,10 +1,10 @@
 package server
 
 import (
+	"log"
 	"net/http"
 	"time"
 
-	"github.com/golang/glog"
 	"github.com/gorilla/mux"
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/logger"
@@ -39,7 +39,7 @@ func NewFileHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerCon
 
 	err := request.UploadFile(filename)
 	if err != nil {
-		glog.Error("Failed to upload file from ", sourceURL, " - ", err)
+		log.Println("Failed to upload file from", sourceURL, "-", err)
 		errorHandlerJSON(err, w, http.StatusNotFound)
 		return
 	}

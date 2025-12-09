@@ -1,7 +1,8 @@
 package core
 
 import (
-	"github.com/golang/glog"
+	"log"
+
 	"github.com/image-server/image-server/mime"
 )
 
@@ -24,7 +25,7 @@ func (ic *ImageConfiguration) ToContentType() string {
 	contentType := mime.ExtToContentType(ic.Format)
 
 	if contentType == "" {
-		glog.Infof("ToContentType: Can't extract content type from format. format=%s, contentType=%s", ic.Format, contentType)
+		log.Printf("ToContentType: Can't extract content type from format. format=%s, contentType=%s", ic.Format, contentType)
 	}
 
 	return contentType
