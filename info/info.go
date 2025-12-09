@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidbyttow/govips/v2/vips"
 	"github.com/image-server/image-server/mime"
 	_ "golang.org/x/image/webp"
 )
@@ -59,16 +60,19 @@ func (i Info) ImageDetails() (*ImageProperties, error) {
 				ContentType: contentType,
 			}
 		} else if i.ContentType == "image/svg+xml" {
-			// Imagemagick is unable to determine svg filetype without file format
+			// SVG doesn't have fixed dimensions
 			details = &ImageProperties{
 				ContentType: i.ContentType,
 			}
 		} else {
-			// can't calculate content type, so will use ImageMagick as fallback
-			// use fallback
-			details, err = i.DetailsFromImageMagick()
+			// Try vips first for formats Go can't decode (e.g., PDF)
+			details, err = i.DetailsFromVips()
 			if err != nil {
-				return nil, err
+				// Fall back to ImageMagick if vips fails
+				details, err = i.DetailsFromImageMagick()
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 
@@ -78,6 +82,52 @@ func (i Info) ImageDetails() (*ImageProperties, error) {
 
 	} else {
 		return nil, err
+	}
+}
+
+func (i Info) DetailsFromVips() (*ImageProperties, error) {
+	img, err := vips.NewImageFromFile(i.Path)
+	if err != nil {
+		return nil, fmt.Errorf("vips failed to load image: %w", err)
+	}
+	defer img.Close()
+
+	log.Println("Info.DetailsFromVips - Using vips as fallback:", i.Path)
+
+	// Determine content type from vips format
+	format := img.Format()
+	contentType := vipsFormatToContentType(format)
+	if contentType == "" {
+		return nil, fmt.Errorf("unknown vips format: %v", format)
+	}
+
+	return &ImageProperties{
+		Height:      img.Height(),
+		Width:       img.Width(),
+		ContentType: contentType,
+	}, nil
+}
+
+func vipsFormatToContentType(format vips.ImageType) string {
+	switch format {
+	case vips.ImageTypeJPEG:
+		return "image/jpeg"
+	case vips.ImageTypePNG:
+		return "image/png"
+	case vips.ImageTypeWEBP:
+		return "image/webp"
+	case vips.ImageTypeGIF:
+		return "image/gif"
+	case vips.ImageTypePDF:
+		return "application/pdf"
+	case vips.ImageTypeTIFF:
+		return "image/tiff"
+	case vips.ImageTypeSVG:
+		return "image/svg+xml"
+	case vips.ImageTypeHEIF:
+		return "image/heif"
+	default:
+		return ""
 	}
 }
 

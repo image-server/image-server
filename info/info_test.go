@@ -74,12 +74,22 @@ func TestImageDetailsOnWEBPWihtoutExtension(t *testing.T) {
 
 func TestImageDetailOnSvg(t *testing.T) {
 	i := info.Info{
-		Path: "../test/images/svg_without_ext",
+		Path:        "../test/images/svg_without_ext",
 		ContentType: "image/svg+xml",
 	}
 	imageDetails, err := i.ImageDetails()
 	Ok(t, err)
 	Equals(t, "image/svg+xml", imageDetails.ContentType)
+}
+
+func TestImageDetailsOnPDF(t *testing.T) {
+	i := info.Info{Path: "../test/images/test.pdf"}
+	imageDetails, err := i.ImageDetails()
+	Ok(t, err)
+	Equals(t, "application/pdf", imageDetails.ContentType)
+	// PDF dimensions are 612x792 points (standard US Letter)
+	Equals(t, 612, imageDetails.Width)
+	Equals(t, 792, imageDetails.Height)
 }
 
 func TestImageDetailsToJSON(t *testing.T) {

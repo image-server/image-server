@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/image-server/image-server/info"
 	"github.com/image-server/image-server/logger"
 	adapter "github.com/image-server/image-server/processor/cli"
+	vipsadapter "github.com/image-server/image-server/processor/vips"
 )
 
 type ProcessorResult struct {
@@ -89,12 +91,35 @@ func (p *Processor) createIfNotAvailable() (bool, error) {
 		dir := filepath.Dir(p.Destination)
 		os.MkdirAll(dir, 0700)
 
-		processor := &adapter.Processor{
-			Source:             p.Source,
-			Destination:        p.Destination,
-			ImageConfiguration: p.ImageConfiguration,
-			ImageDetails:       p.ImageDetails,
+		// Use vips for supported formats, fall back to ImageMagick for unsupported formats
+		format := strings.ToLower(p.ImageConfiguration.Format)
+		inputContentType := ""
+		if p.ImageDetails != nil {
+			inputContentType = p.ImageDetails.ContentType
 		}
+		var processor core.Processor
+
+		// Use vips if available and both input and output formats are supported
+		useVips := vipsadapter.Available &&
+			vipsadapter.SupportedFormat(format) &&
+			(inputContentType == "" || vipsadapter.SupportedInputFormat(inputContentType))
+
+		if useVips {
+			processor = &vipsadapter.Processor{
+				Source:             p.Source,
+				Destination:        p.Destination,
+				ImageConfiguration: p.ImageConfiguration,
+				ImageDetails:       p.ImageDetails,
+			}
+		} else {
+			processor = &adapter.Processor{
+				Source:             p.Source,
+				Destination:        p.Destination,
+				ImageConfiguration: p.ImageConfiguration,
+				ImageDetails:       p.ImageDetails,
+			}
+		}
+
 		err = processor.CreateImage()
 
 		if err != nil {
