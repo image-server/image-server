@@ -10,6 +10,7 @@ A high-performance image processing server written in Go. Supports on-demand ima
 - **Signed URLs** - Secure uploads with HMAC-SHA256 signed URLs (similar to AWS S3 pre-signed URLs)
 - **Batch processing** - Process multiple image sizes in a single request
 - **Prometheus metrics** - Built-in metrics endpoint for monitoring
+- **Webhooks** - Notify external systems when images are uploaded or processed
 - **Docker support** - Ready-to-use Docker image
 
 ## Quick Start
@@ -197,6 +198,120 @@ Sign a path prefix to allow uploads to any path under it:
 ./image-server sign-url --secret "..." --path /products/abc/def/ghi/jkl --ttl 15m
 # Allows only that exact path
 ```
+
+## Webhooks
+
+Send HTTP notifications to external systems when images are uploaded or processed. Useful for triggering downstream workflows like OCR, ML pipelines, or cache invalidation.
+
+### Setup
+
+```bash
+./image-server server \
+  --webhook-url "https://api.example.com/webhooks/images" \
+  --webhook-secret "$(./image-server generate-secret)" \
+  --webhook-timeout 10 \
+  --webhook-events "uploaded,batch_complete"
+```
+
+### Events
+
+| Event | Trigger | Use Case |
+|-------|---------|----------|
+| `uploaded` | Original image uploaded to storage | Start processing pipeline |
+| `processed` | Each image variant processed | Cache warming |
+| `failed` | Processing error | Alerting |
+| `batch_complete` | All variants done (or already existed) | Trigger downstream workflow |
+
+By default, all events are sent. Use `--webhook-events` to filter.
+
+### Payload Format
+
+```json
+{
+  "event": "image.uploaded",
+  "timestamp": "2025-12-09T15:30:00Z",
+  "data": {
+    "namespace": "products",
+    "hash": "6e0072682e66287b662827da75b244a3",
+    "width": 1920,
+    "height": 1080,
+    "content_type": "image/jpeg",
+    "remote_url": "https://cdn.example.com/products/6e0/072/.../original"
+  }
+}
+```
+
+For `image.processed`:
+```json
+{
+  "event": "image.processed",
+  "timestamp": "2025-12-09T15:30:01Z",
+  "data": {
+    "namespace": "products",
+    "hash": "6e0072682e66287b662827da75b244a3",
+    "filename": "x300.webp",
+    "format": "webp",
+    "width": 300,
+    "height": 169,
+    "quality": 75,
+    "remote_url": "https://cdn.example.com/products/6e0/072/.../x300.webp"
+  }
+}
+```
+
+### Security
+
+Webhooks are signed with HMAC-SHA256. Verify the signature in your handler:
+
+**Headers:**
+```
+X-Webhook-Signature: sha256=<hex-encoded-hmac>
+X-Webhook-Timestamp: 1702135800
+```
+
+**Verification (Python):**
+```python
+import hmac
+import hashlib
+
+def verify_webhook(secret: str, timestamp: str, body: bytes, signature: str) -> bool:
+    expected = "sha256=" + hmac.new(
+        secret.encode(),
+        f"{timestamp}.{body.decode()}".encode(),
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+# In your handler:
+if not verify_webhook(SECRET, request.headers["X-Webhook-Timestamp"],
+                      request.body, request.headers["X-Webhook-Signature"]):
+    return 401
+```
+
+**Verification (Go):**
+```go
+func verifyWebhook(secret, timestamp string, body []byte, signature string) bool {
+    h := hmac.New(sha256.New, []byte(secret))
+    h.Write([]byte(fmt.Sprintf("%s.%s", timestamp, string(body))))
+    expected := "sha256=" + hex.EncodeToString(h.Sum(nil))
+    return hmac.Equal([]byte(expected), []byte(signature))
+}
+```
+
+### Configuration
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--webhook-url` | Endpoint URL (enables webhooks) | - |
+| `--webhook-secret` | HMAC signing secret | - |
+| `--webhook-timeout` | HTTP timeout in seconds | `10` |
+| `--webhook-events` | Events to send (comma-separated) | all |
+
+### Reliability
+
+- Webhooks are sent asynchronously (non-blocking)
+- Failed deliveries retry up to 3 times with exponential backoff (1s, 4s)
+- Webhook failures don't affect image processing
 
 ## Cloud Storage (S3)
 
