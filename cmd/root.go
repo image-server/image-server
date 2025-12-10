@@ -12,6 +12,7 @@ import (
 	"github.com/image-server/image-server/fetcher/http"
 	"github.com/image-server/image-server/logger/prometheus"
 	"github.com/image-server/image-server/logger/statsd"
+	"github.com/image-server/image-server/logger/webhook"
 	"github.com/image-server/image-server/paths"
 	"github.com/image-server/image-server/uploader"
 	"github.com/spf13/cobra"
@@ -59,6 +60,12 @@ type configT struct {
 	requireSignatureForRead bool
 	signingSecretsFile      string
 	signatureMaxTTL         int
+
+	// Webhooks
+	webhookURL     string
+	webhookSecret  string
+	webhookTimeout int
+	webhookEvents  string
 }
 
 var config configT
@@ -91,6 +98,17 @@ func serverConfiguration() (*core.ServerConfiguration, error) {
 	}
 	sc.Adapters = adapters
 	sc.CleanUpTicker = time.NewTicker(2 * time.Minute)
+
+	// Enable webhooks if configured
+	if config.webhookURL != "" {
+		webhookCfg := &webhook.Config{
+			URL:     config.webhookURL,
+			Secret:  config.webhookSecret,
+			Timeout: time.Duration(config.webhookTimeout) * time.Second,
+			Events:  parseWebhookEvents(config.webhookEvents),
+		}
+		webhook.Enable(webhookCfg, adapters.Paths)
+	}
 
 	return sc, nil
 }
@@ -192,4 +210,28 @@ func initializeUploader(sc *core.ServerConfiguration) {
 		log.Println("EXITING: Unable to initialize uploader: ", err)
 		os.Exit(2)
 	}
+}
+
+// parseWebhookEvents parses a comma-separated list of webhook events
+func parseWebhookEvents(events string) map[webhook.EventType]bool {
+	if events == "" {
+		return nil // nil means all events
+	}
+
+	result := make(map[webhook.EventType]bool)
+	for _, e := range strings.Split(events, ",") {
+		switch strings.TrimSpace(e) {
+		case "uploaded":
+			result[webhook.EventImageUploaded] = true
+		case "processed":
+			result[webhook.EventImageProcessed] = true
+		case "failed":
+			result[webhook.EventImageProcessingFailed] = true
+		case "batch_complete":
+			result[webhook.EventBatchComplete] = true
+		default:
+			log.Printf("Warning: unknown webhook event type: %s", e)
+		}
+	}
+	return result
 }

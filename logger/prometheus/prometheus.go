@@ -76,3 +76,9 @@ func (l *Logger) OriginalDownloadSkipped(source string) {
 func (l *Logger) RequestLatency(handler string, since time.Time) {
 	l.metrics.requestLatency.WithLabelValues(handler).Observe(time.Since(since).Seconds())
 }
+
+// OriginalUploaded is called when an original image is uploaded
+func (l *Logger) OriginalUploaded(props *core.ImageProperties, namespace string) {
+	// Prometheus doesn't need to track individual uploads
+	// Could add a counter here if desired
+}

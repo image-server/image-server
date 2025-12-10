@@ -3,8 +3,10 @@ package request
 import (
 	"log"
 
+	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/fetcher"
 	"github.com/image-server/image-server/info"
+	"github.com/image-server/image-server/logger"
 	"github.com/image-server/image-server/uploader"
 )
 
@@ -69,6 +71,15 @@ func (r *Request) UploadOriginal(imageDetails *info.ImageProperties) error {
 	if err != nil {
 		return err
 	}
+
+	// Notify loggers (including webhooks) that original was uploaded
+	logger.OriginalUploaded(&core.ImageProperties{
+		Hash:        imageDetails.Hash,
+		Height:      imageDetails.Height,
+		Width:       imageDetails.Width,
+		ContentType: imageDetails.ContentType,
+	}, r.Namespace)
+
 	return nil
 }
 

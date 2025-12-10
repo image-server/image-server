@@ -1,7 +1,7 @@
 package core
 
 // VERSION number of current image server
-const VERSION = "1.20.0"
+const VERSION = "1.21.0"
 
 // GitHash is the git hash and is set at build time as a ldflags
 var GitHash = "GitHash is not defined"

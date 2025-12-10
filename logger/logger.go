@@ -77,3 +77,9 @@ func RequestLatency(handler string, since time.Time) {
 		go logger.RequestLatency(handler, since)
 	}
 }
+
+func OriginalUploaded(props *core.ImageProperties, namespace string) {
+	for _, logger := range Loggers {
+		go logger.OriginalUploaded(props, namespace)
+	}
+}
