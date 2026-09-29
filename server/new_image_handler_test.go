@@ -17,11 +17,13 @@ import (
 	"github.com/image-server/image-server/server"
 	"github.com/image-server/image-server/uploader"
 
-	. "github.com/image-server/image-server/test"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"context"
 	"fmt"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	. "github.com/image-server/image-server/test"
 )
 
 func TestNewImageHandlerWithData(t *testing.T) {
@@ -122,21 +124,26 @@ func hasAwsAuthentication() bool {
 }
 
 func deleteS3TestDirectory() {
-	sess := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String(os.Getenv("AWS_REGION")),
-	}))
-	svc := s3.New(sess)
+	ctx := context.Background()
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(os.Getenv("AWS_REGION")))
+	if err != nil {
+		return
+	}
+	svc := s3.NewFromConfig(cfg)
 
-	resp, err := svc.ListObjects(&s3.ListObjectsInput{
-		Bucket:    aws.String(os.Getenv("AWS_BUCKET")),
-		Prefix:    aws.String("test"),
+	paginator := s3.NewListObjectsV2Paginator(svc, &s3.ListObjectsV2Input{
+		Bucket: aws.String(os.Getenv("AWS_BUCKET")),
+		Prefix: aws.String("test"),
 	})
-	if err == nil {
-		entries := resp.Contents
-		for _, entry := range entries {
-			key := aws.StringValue(entry.Key)
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return
+		}
+		for _, entry := range page.Contents {
+			key := aws.ToString(entry.Key)
 			fmt.Printf("Deleting key: [%s]\n", key)
-			svc.DeleteObject(&s3.DeleteObjectInput{
+			svc.DeleteObject(ctx, &s3.DeleteObjectInput{
 				Bucket: aws.String(os.Getenv("AWS_BUCKET")),
 				Key:    aws.String(key),
 			})
@@ -149,7 +156,7 @@ func buildTestS3ServerConfiguration() *core.ServerConfiguration {
 		LocalBasePath:  "../public",
 		RemoteBasePath: "test",
 		DefaultQuality: 90,
-		UploaderType: "aws",
+		UploaderType:   "aws",
 		AWSBucket:      os.Getenv("AWS_BUCKET"),
 		AWSRegion:      os.Getenv("AWS_REGION"),
 	}
