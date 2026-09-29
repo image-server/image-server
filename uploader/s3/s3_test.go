@@ -7,8 +7,6 @@ import (
 
 	. "github.com/image-server/image-server/test"
 	"github.com/image-server/image-server/uploader/s3"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/aws"
 )
 
 func TestItemToHash(t *testing.T) {
@@ -18,11 +16,6 @@ func TestItemToHash(t *testing.T) {
 
 	bucketName := os.Getenv("AWS_BUCKET")
 	regionName := os.Getenv("AWS_REGION")
-
-	sess := session.Must(session.NewSession(&aws.Config{
-		Region: aws.String(regionName),
-	}))
-	Assert(t, sess != nil, "We need AWS access for integration tests")
 
 	s3.Initialize(bucketName, regionName)
 
