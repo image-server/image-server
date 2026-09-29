@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine
+FROM golang:1.27-alpine3.24
 
 # Install build dependencies for govips (CGO)
 RUN apk add --no-cache build-base vips-dev pkgconfig
@@ -14,7 +14,7 @@ ARG SHORT_COMMIT_HASH
 
 RUN go build -ldflags="-X github.com/image-server/image-server/core.BuildTimestamp=`date -u '+%Y-%m-%d_%I:%M:%S%p_%z'` -X github.com/image-server/image-server/core.GitHash=${SHORT_COMMIT_HASH}"
 
-FROM alpine:3.21
+FROM alpine:3.24
 
 # Install vips for image processing (poppler for PDF, heif for iPhone images)
 RUN apk add --no-cache vips vips-poppler vips-heif

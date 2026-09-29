@@ -1,6 +1,6 @@
 module github.com/image-server/image-server
 
-go 1.24.4
+go 1.27.1
 
 require (
 	github.com/aws/aws-sdk-go v1.55.8
@@ -14,7 +14,7 @@ require (
 	github.com/tylerb/graceful v1.2.15
 	github.com/unrolled/render v1.7.0
 	github.com/urfave/negroni v1.0.0
-	golang.org/x/image v0.34.0
+	golang.org/x/image v0.46.0
 )
 
 require (
@@ -29,8 +29,8 @@ require (
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	golang.org/x/net v0.43.0 // indirect
-	golang.org/x/sys v0.35.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
+	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 )
