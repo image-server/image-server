@@ -1,6 +1,8 @@
 package vips_test
 
 import (
+	"encoding/binary"
+	"image/jpeg"
 	"os"
 	"path/filepath"
 	"testing"
@@ -294,4 +296,38 @@ func TestVipsPdfToPng(t *testing.T) {
 	Equals(t, "image/png", details.ContentType)
 	Equals(t, 300, details.Width)
 	Equals(t, 400, details.Height)
+}
+
+// A sideways phone photo: pixels stored 200×100 with EXIF orientation 6
+// (display turns 90° clockwise). Metadata is stripped on export, so the
+// rotation must be baked into the pixels: left (red) half ends up on top.
+func TestVipsAppliesExifOrientation(t *testing.T) {
+	if !vips.Available {
+		t.Skip("vips not available, skipping tests")
+	}
+
+	tmpDir := t.TempDir()
+	source := filepath.Join(tmpDir, "rotated.jpg")
+	dest := filepath.Join(tmpDir, "w50.jpg")
+	WriteOrientedJPEG(t, source, 200, 100, 6, binary.BigEndian)
+
+	p := vips.Processor{
+		Source:             source,
+		Destination:        dest,
+		ImageConfiguration: &core.ImageConfiguration{Width: 50, Format: "jpg", Quality: 90},
+		ImageDetails:       &info.ImageProperties{Width: 100, Height: 200},
+	}
+	Ok(t, p.CreateImage())
+
+	f, err := os.Open(dest)
+	Ok(t, err)
+	defer f.Close()
+	out, err := jpeg.Decode(f)
+	Ok(t, err)
+	Equals(t, 50, out.Bounds().Dx())
+	Equals(t, 100, out.Bounds().Dy())
+	top, _, topBlue, _ := out.At(25, 10).RGBA()
+	_, _, bottom, _ := out.At(25, 90).RGBA()
+	Assert(t, top > 0xC000 && topBlue < 0x4000, "top should be red")
+	Assert(t, bottom > 0xC000, "bottom should be blue")
 }

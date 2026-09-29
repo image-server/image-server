@@ -25,6 +25,12 @@ func (p *Processor) CreateImage() error {
 	}
 	defer image.Close()
 
+	// Bake EXIF orientation into pixels before resize/crop: metadata is
+	// stripped on export, so a tag-only rotation would otherwise be lost.
+	if err := image.AutoRotate(); err != nil {
+		return fmt.Errorf("vips failed to auto-rotate image: %w", err)
+	}
+
 	ic := p.ImageConfiguration
 
 	// Flatten alpha channel with white background (equivalent to -flatten)
