@@ -46,6 +46,8 @@ func (p *Processor) CommandArgs() []string {
 
 	args := list.New()
 
+	// Before -strip: apply EXIF orientation to pixels, then drop the tag.
+	args.PushBack("-auto-orient")
 	args.PushBack("-strip")
 
 	args.PushBack("-format")

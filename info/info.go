@@ -59,6 +59,12 @@ func (i Info) ImageDetails() (*ImageProperties, error) {
 				Width:       im.Width,
 				ContentType: contentType,
 			}
+			// Report displayed size: processed outputs are auto-rotated.
+			if format == "jpeg" {
+				if _, err := reader.Seek(0, io.SeekStart); err == nil && swapsAxes(jpegOrientation(reader)) {
+					details.Width, details.Height = details.Height, details.Width
+				}
+			}
 		} else if i.ContentType == "image/svg+xml" {
 			// SVG doesn't have fixed dimensions
 			details = &ImageProperties{
@@ -101,9 +107,15 @@ func (i Info) DetailsFromVips() (*ImageProperties, error) {
 		return nil, fmt.Errorf("unknown vips format: %v", format)
 	}
 
+	width, height := img.Width(), img.Height()
+	// Report displayed size: processed outputs are auto-rotated.
+	if swapsAxes(img.Orientation()) {
+		width, height = height, width
+	}
+
 	return &ImageProperties{
-		Height:      img.Height(),
-		Width:       img.Width(),
+		Height:      height,
+		Width:       width,
 		ContentType: contentType,
 	}, nil
 }

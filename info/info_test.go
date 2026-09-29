@@ -1,8 +1,10 @@
 package info_test
 
 import (
+	"encoding/binary"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/image-server/image-server/info"
@@ -118,4 +120,22 @@ func TestSaveImageDetail(t *testing.T) {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return os.IsNotExist(err)
+}
+
+func TestImageDetailsReportsDisplayedSizeForRotatedJPEG(t *testing.T) {
+	for _, order := range []binary.ByteOrder{binary.BigEndian, binary.LittleEndian} {
+		for orientation, swapped := range map[int]bool{1: false, 3: false, 6: true, 8: true} {
+			path := filepath.Join(t.TempDir(), "rotated.jpg")
+			WriteOrientedJPEG(t, path, 200, 100, orientation, order)
+			details, err := info.Info{Path: path}.ImageDetails()
+			Ok(t, err)
+			if swapped {
+				Equals(t, 100, details.Width)
+				Equals(t, 200, details.Height)
+			} else {
+				Equals(t, 200, details.Width)
+				Equals(t, 100, details.Height)
+			}
+		}
+	}
 }
