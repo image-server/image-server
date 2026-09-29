@@ -4,9 +4,11 @@ import (
 	"encoding/binary"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
+	"github.com/davidbyttow/govips/v2/vips"
 	"github.com/image-server/image-server/info"
 	. "github.com/image-server/image-server/test"
 )
@@ -138,4 +140,62 @@ func TestImageDetailsReportsDisplayedSizeForRotatedJPEG(t *testing.T) {
 			}
 		}
 	}
+}
+
+// writeOriented re-encodes the oriented JPEG fixture as PNG/WebP, keeping the
+// EXIF orientation (eXIf / EXIF chunk), like an edited phone photo.
+func writeOriented(t *testing.T, format string, orientation int) string {
+	t.Helper()
+	dir := t.TempDir()
+	src := filepath.Join(dir, "rotated.jpg")
+	WriteOrientedJPEG(t, src, 200, 100, orientation, binary.BigEndian)
+	img, err := vips.NewImageFromFile(src)
+	Ok(t, err)
+	defer img.Close()
+	var buf []byte
+	switch format {
+	case "png":
+		params := vips.NewPngExportParams()
+		params.StripMetadata = false
+		buf, _, err = img.ExportPng(params)
+	case "webp":
+		params := vips.NewWebpExportParams()
+		params.StripMetadata = false
+		buf, _, err = img.ExportWebp(params)
+	}
+	Ok(t, err)
+	path := filepath.Join(dir, "rotated."+format)
+	Ok(t, os.WriteFile(path, buf, 0644))
+	return path
+}
+
+func TestImageDetailsReportsDisplayedSizeForRotatedPNGAndWebP(t *testing.T) {
+	for _, format := range []string{"png", "webp"} {
+		for orientation, swapped := range map[int]bool{1: false, 6: true, 8: true} {
+			details, err := info.Info{Path: writeOriented(t, format, orientation)}.ImageDetails()
+			Ok(t, err)
+			if swapped {
+				Equals(t, 100, details.Width)
+				Equals(t, 200, details.Height)
+			} else {
+				Equals(t, 200, details.Width)
+				Equals(t, 100, details.Height)
+			}
+		}
+	}
+}
+
+func TestDetailsFromImageMagickReportsDisplayedSize(t *testing.T) {
+	if _, err := exec.LookPath("identify"); err != nil {
+		t.Skip("ImageMagick not available")
+	}
+	details, err := info.Info{Path: writeOriented(t, "png", 6)}.DetailsFromImageMagick()
+	Ok(t, err)
+	Equals(t, 100, details.Width)
+	Equals(t, 200, details.Height)
+
+	details, err = info.Info{Path: writeOriented(t, "png", 1)}.DetailsFromImageMagick()
+	Ok(t, err)
+	Equals(t, 200, details.Width)
+	Equals(t, 100, details.Height)
 }

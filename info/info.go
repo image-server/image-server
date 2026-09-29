@@ -60,10 +60,8 @@ func (i Info) ImageDetails() (*ImageProperties, error) {
 				ContentType: contentType,
 			}
 			// Report displayed size: processed outputs are auto-rotated.
-			if format == "jpeg" {
-				if _, err := reader.Seek(0, io.SeekStart); err == nil && swapsAxes(jpegOrientation(reader)) {
-					details.Width, details.Height = details.Height, details.Width
-				}
+			if swapsAxes(i.orientation(reader, format)) {
+				details.Width, details.Height = details.Height, details.Width
 			}
 		} else if i.ContentType == "image/svg+xml" {
 			// SVG doesn't have fixed dimensions
@@ -88,6 +86,28 @@ func (i Info) ImageDetails() (*ImageProperties, error) {
 
 	} else {
 		return nil, err
+	}
+}
+
+// orientation returns the EXIF orientation of an image Go decoded, 1 if none.
+// JPEG uses the local EXIF reader; PNG and WebP (eXIf / EXIF chunk) ask vips,
+// which the processor also uses to rotate them.
+func (i Info) orientation(reader io.ReadSeeker, format string) int {
+	switch format {
+	case "jpeg":
+		if _, err := reader.Seek(0, io.SeekStart); err != nil {
+			return 1
+		}
+		return jpegOrientation(reader)
+	case "png", "webp":
+		img, err := vips.NewImageFromFile(i.Path)
+		if err != nil {
+			return 1
+		}
+		defer img.Close()
+		return img.Orientation()
+	default:
+		return 1
 	}
 }
 
@@ -150,7 +170,7 @@ func (i Info) DetailsFromImageMagick() (*ImageProperties, error) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	args := []string{"-format", "%[fx:w]:%[fx:h]:%m", i.Path}
+	args := []string{"-format", "%[fx:w]:%[fx:h]:%m:%[orientation]", i.Path}
 	cmd := exec.Command("identify", args...)
 	cmd.Env = []string{"TMPDIR=" + tmpDir, "MAGICK_DISK_LIMIT=100000000"}
 	out, err := cmd.Output()
@@ -182,6 +202,11 @@ func (i Info) DetailsFromImageMagick() (*ImageProperties, error) {
 		return nil, err
 	}
 
+	// Report displayed size: -auto-orient turns LeftTop..LeftBottom 90 degrees.
+	if len(d) > 3 && magickSwapsAxes(d[3]) {
+		w, h = h, w
+	}
+
 	return &ImageProperties{
 		Height:      h,
 		Width:       w,
@@ -200,4 +225,13 @@ func getContentTypeFromExtension(format string) (string, error) {
 	}
 
 	return contentType, nil
+}
+
+// magickSwapsAxes is true for ImageMagick orientation names of EXIF 5-8.
+func magickSwapsAxes(orientation string) bool {
+	switch orientation {
+	case "LeftTop", "RightTop", "RightBottom", "LeftBottom":
+		return true
+	}
+	return false
 }
