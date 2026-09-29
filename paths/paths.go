@@ -41,7 +41,11 @@ func (p *Paths) RemoteImagePath(namespace string, md5 string, imageName string) 
 	return filepath.Join(p.RemoteBasePath, p.imagePath(namespace, md5, imageName))
 }
 
+// RemoteImageURL returns "" when no remote store is configured (RemoteBaseURL empty).
 func (p *Paths) RemoteImageURL(namespace string, md5 string, imageName string) string {
+	if p.RemoteBaseURL == "" {
+		return ""
+	}
 	u, _ := url.Parse(p.RemoteBaseURL)
 	u.Path = filepath.Join(u.Path, p.RemoteImagePath(namespace, md5, imageName))
 	return u.String()
@@ -52,7 +56,11 @@ func (p *Paths) RemoteOriginalPath(namespace string, md5 string) string {
 	return filepath.Join(p.RemoteBasePath, p.originalPath(namespace, md5))
 }
 
+// RemoteOriginalURL returns "" when no remote store is configured (RemoteBaseURL empty).
 func (p *Paths) RemoteOriginalURL(namespace string, md5 string) string {
+	if p.RemoteBaseURL == "" {
+		return ""
+	}
 	u, _ := url.Parse(p.RemoteBaseURL)
 	u.Path = filepath.Join(u.Path, p.RemoteOriginalPath(namespace, md5))
 	return u.String()

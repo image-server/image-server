@@ -1,12 +1,16 @@
 package fetcher
 
 import (
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
 
 	httpFetcher "github.com/image-server/image-server/fetcher/http"
 )
+
+// ErrNoRemoteStore is returned when a file is not local and no remote base URL is set.
+var ErrNoRemoteStore = errors.New("not found locally and no remote store configured")
 
 type UniqueFetcher struct {
 	Source      string
@@ -20,6 +24,14 @@ func NewUniqueFetcher(source string, destination string) *UniqueFetcher {
 // Fetch returns a boolean to denote if the image was downloaded.
 // This value is false when the image is already present in the filesystem
 func (f *UniqueFetcher) Fetch() (bool, error) {
+	// No remote store: only a local copy can satisfy the request. Checked
+	// before the dedupe map, which is keyed by source URL.
+	if f.Source == "" {
+		if _, err := os.Stat(f.Destination); err != nil {
+			return false, ErrNoRemoteStore
+		}
+		return false, nil
+	}
 	c := make(chan FetchResult)
 	go f.uniqueFetch(c)
 	r := <-c
