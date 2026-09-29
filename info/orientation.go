@@ -55,7 +55,9 @@ func jpegOrientation(r io.Reader) int {
 	}
 }
 
-// tiffOrientation reads tag 0x0112 from IFD0 of a TIFF header.
+// tiffOrientation reads tag 0x0112 from IFD0 of a TIFF header. Anything but
+// a well-formed SHORT with count 1 and value 1-8 is treated as no orientation,
+// matching libvips, so info and processed outputs agree.
 func tiffOrientation(tiff []byte) int {
 	if len(tiff) < 8 {
 		return 1
@@ -69,21 +71,29 @@ func tiffOrientation(tiff []byte) int {
 	default:
 		return 1
 	}
-	ifd := int(order.Uint32(tiff[4:8]))
-	if ifd < 8 || ifd+2 > len(tiff) {
+	if order.Uint16(tiff[2:4]) != 42 {
 		return 1
 	}
-	count := int(order.Uint16(tiff[ifd : ifd+2]))
-	for i := 0; i < count; i++ {
-		entry := ifd + 2 + i*12
-		if entry+12 > len(tiff) {
-			return 1
-		}
-		if order.Uint16(tiff[entry:entry+2]) != 0x0112 {
+	// Bounds by subtraction: no int overflow on 32-bit builds.
+	ifd := order.Uint32(tiff[4:8])
+	if ifd < 8 || uint64(ifd) > uint64(len(tiff)-2) {
+		return 1
+	}
+	entries := tiff[ifd:]
+	count := int(order.Uint16(entries[:2]))
+	entries = entries[2:]
+	for i := 0; i < count && len(entries) >= 12; i++ {
+		entry := entries[:12]
+		entries = entries[12:]
+		if order.Uint16(entry[0:2]) != 0x0112 {
 			continue
 		}
+		const typeShort = 3
+		if order.Uint16(entry[2:4]) != typeShort || order.Uint32(entry[4:8]) != 1 {
+			return 1
+		}
 		// SHORT value, stored in the first two bytes of the value field.
-		v := int(order.Uint16(tiff[entry+8 : entry+10]))
+		v := int(order.Uint16(entry[8:10]))
 		if v < 1 || v > 8 {
 			return 1
 		}
