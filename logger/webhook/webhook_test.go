@@ -292,10 +292,12 @@ func TestWebhookRetry(t *testing.T) {
 }
 
 func TestWebhookNoSecret(t *testing.T) {
-	var receivedHeaders http.Header
+	// The webhook is sent from another goroutine: hand the headers over on a
+	// channel instead of sharing a variable
+	received := make(chan http.Header, 1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedHeaders = r.Header.Clone()
+		received <- r.Header.Clone()
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -315,9 +317,12 @@ func TestWebhookNoSecret(t *testing.T) {
 
 	logger.OriginalUploaded(&core.ImageProperties{Hash: "abc123"}, "test")
 
-	time.Sleep(100 * time.Millisecond)
-
-	if receivedHeaders.Get(headerSignature) != "" {
-		t.Error("Should not have signature header when no secret configured")
+	select {
+	case headers := <-received:
+		if headers.Get(headerSignature) != "" {
+			t.Error("Should not have signature header when no secret configured")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("webhook was not received")
 	}
 }
