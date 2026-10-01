@@ -64,6 +64,9 @@ func (p *Processor) CommandArgs() []string {
 	if ic.Crop != nil {
 		// Validated by CreateImage
 		cropLeft, cropTop, cropW, cropH, _ := p.cropRect()
+		// -auto-orient can leave a page offset (e.g. orientation 7) that
+		// -crop would otherwise measure from
+		args.PushBack("+repage")
 		args.PushBack("-crop")
 		args.PushBack(fmt.Sprintf("%dx%d+%d+%d", cropW, cropH, cropLeft, cropTop))
 		args.PushBack("+repage")

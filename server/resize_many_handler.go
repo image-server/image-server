@@ -32,9 +32,14 @@ func ResizeManyHandler(w http.ResponseWriter, req *http.Request, sc *core.Server
 		Hash:                varsToHash(vars),
 	}
 
+	if err := validateOutputs(sc, ir.Outputs); err != nil {
+		errorHandlerJSON(err, w, http.StatusBadRequest)
+		return
+	}
+
 	err := ir.ProcessMultiple()
 	if err != nil {
-		errorHandlerJSON(err, w, http.StatusInternalServerError)
+		errorHandlerJSON(err, w, errorStatus(err, http.StatusInternalServerError))
 		return
 	}
 	w.WriteHeader(200)

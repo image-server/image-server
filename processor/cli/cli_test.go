@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
 	"image/jpeg"
 	"os"
 	"os/exec"
@@ -78,7 +80,7 @@ func TestImageWithCrop(t *testing.T) {
 		Crop: &core.CropBox{X0: 50, Y0: 640, X1: 390, Y1: 920}}
 	id := &info.ImageProperties{Width: 3024, Height: 4032}
 
-	expected := []string{"-auto-orient", "-strip", "-format", "jpg", "-flatten", "-crop", "1028x1129+151+2580", "+repage", "-resize", "100>", "-background", "rgba(255,255,255,1)", "-quality", "90", "original", "crop.jpg"}
+	expected := []string{"-auto-orient", "-strip", "-format", "jpg", "-flatten", "+repage", "-crop", "1028x1129+151+2580", "+repage", "-resize", "100>", "-background", "rgba(255,255,255,1)", "-quality", "90", "original", "crop.jpg"}
 
 	p := cli.Processor{
 		Source:             "original",
@@ -89,8 +91,14 @@ func TestImageWithCrop(t *testing.T) {
 	Equals(t, expected, p.CommandArgs())
 }
 
-// Runs ImageMagick for real: the crop must be measured on the upright image
-func TestCropAppliesOrientationFirst(t *testing.T) {
+// convertCrop runs ImageMagick for real on a stored 200×100 JPEG (left red,
+// right blue) with the given EXIF orientation, upright 100×200
+func convertCrop(t *testing.T, orientation, width int, crop *core.CropBox) image.Image {
+	return convertCropSized(t, orientation, width, crop, &info.ImageProperties{Width: 100, Height: 200})
+}
+
+func convertCropSized(t *testing.T, orientation, width int, crop *core.CropBox, details *info.ImageProperties) image.Image {
+	t.Helper()
 	if _, err := exec.LookPath("convert"); err != nil {
 		t.Skip("ImageMagick not available")
 	}
@@ -98,15 +106,13 @@ func TestCropAppliesOrientationFirst(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "rotated.jpg")
 	dest := filepath.Join(dir, "crop.jpg")
-	// Stored 200×100 (left red, right blue), orientation 6: upright 100×200, red on top
-	WriteOrientedJPEG(t, source, 200, 100, 6, binary.BigEndian)
+	WriteOrientedJPEG(t, source, 200, 100, orientation, binary.BigEndian)
 
 	p := cli.Processor{
-		Source:      source,
-		Destination: dest,
-		ImageConfiguration: &core.ImageConfiguration{Width: 1000, Format: "jpg", Quality: 90,
-			Crop: &core.CropBox{X0: 0, Y0: 250, X1: 1000, Y1: 750}},
-		ImageDetails: &info.ImageProperties{Width: 100, Height: 200},
+		Source:             source,
+		Destination:        dest,
+		ImageConfiguration: &core.ImageConfiguration{Width: width, Format: "jpg", Quality: 90, Crop: crop},
+		ImageDetails:       details,
 	}
 	Ok(t, p.CreateImage())
 
@@ -115,13 +121,62 @@ func TestCropAppliesOrientationFirst(t *testing.T) {
 	defer f.Close()
 	out, err := jpeg.Decode(f)
 	Ok(t, err)
+	return out
+}
+
+func isRed(c color.Color) bool {
+	r, _, b, _ := c.RGBA()
+	return r > 0xC000 && b < 0x4000
+}
+
+func isBlue(c color.Color) bool {
+	r, _, b, _ := c.RGBA()
+	return b > 0xC000 && r < 0x4000
+}
+
+// Orientation 6 puts the stored left (red) half on top
+func TestCropAppliesOrientationFirst(t *testing.T) {
+	out := convertCrop(t, 6, 1000, &core.CropBox{X0: 0, Y0: 250, X1: 1000, Y1: 750})
 	// Not enlarged to 1000
 	Equals(t, 100, out.Bounds().Dx())
 	Equals(t, 100, out.Bounds().Dy())
-	r, _, b, _ := out.At(50, 10).RGBA()
-	Assert(t, r > 0xC000 && b < 0x4000, "top should be red")
-	r, _, b, _ = out.At(50, 90).RGBA()
-	Assert(t, b > 0xC000 && r < 0x4000, "bottom should be blue")
+	Assert(t, isRed(out.At(50, 10)), "top should be red")
+	Assert(t, isBlue(out.At(50, 90)), "bottom should be blue")
+}
+
+// Orientation 7 (transverse) puts the stored left (red) half at the bottom
+func TestCropAppliesMirroredOrientation(t *testing.T) {
+	out := convertCrop(t, 7, 0, &core.CropBox{X0: 0, Y0: 0, X1: 1000, Y1: 500})
+	Equals(t, 100, out.Bounds().Dx())
+	Equals(t, 100, out.Bounds().Dy())
+	Assert(t, isBlue(out.At(50, 50)), "upper half should be blue")
+}
+
+// The first half of the upright image along its long side, for every
+// orientation. Stored 200×100 is left red, right blue.
+func TestCropAllOrientations(t *testing.T) {
+	for orientation, wantRed := range map[int]bool{1: true, 2: false, 3: false, 4: true, 5: true, 6: true, 7: false, 8: false} {
+		var out image.Image
+		if orientation <= 4 {
+			// Upright 200×100: left half
+			out = convertCropSized(t, orientation, 0, &core.CropBox{X0: 0, Y0: 0, X1: 500, Y1: 1000},
+				&info.ImageProperties{Width: 200, Height: 100})
+		} else {
+			// Upright 100×200: top half
+			out = convertCrop(t, orientation, 0, &core.CropBox{X0: 0, Y0: 0, X1: 1000, Y1: 500})
+		}
+		Equals(t, 100, out.Bounds().Dx())
+		Equals(t, 100, out.Bounds().Dy())
+		Assert(t, isRed(out.At(50, 50)) == wantRed && isBlue(out.At(50, 50)) == !wantRed,
+			"orientation %d: expected red=%v", orientation, wantRed)
+	}
+}
+
+func TestCropShrinksToWidth(t *testing.T) {
+	out := convertCrop(t, 6, 40, &core.CropBox{X0: 0, Y0: 0, X1: 1000, Y1: 500})
+	Equals(t, 40, out.Bounds().Dx())
+	Equals(t, 40, out.Bounds().Dy())
+	Assert(t, isRed(out.At(20, 20)), "should be red")
 }
 
 func TestCropRejectsEmptyBox(t *testing.T) {

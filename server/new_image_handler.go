@@ -31,6 +31,11 @@ func NewImageHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerCo
 		outputs = strings.Split(qs.Get("outputs"), ",")
 	}
 
+	if err := validateOutputs(sc, outputs); err != nil {
+		errorHandlerJSON(err, w, http.StatusBadRequest)
+		return
+	}
+
 	request := &request.Request{
 		ServerConfiguration: sc,
 		Namespace:           namespace,
@@ -46,7 +51,7 @@ func NewImageHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerCo
 	if err != nil {
 		go logger.ImagePostingFailed()
 		log.Println("Failed to create image from", sourceURL, "-", err)
-		errorHandlerJSON(err, w, http.StatusNotFound)
+		errorHandlerJSON(err, w, errorStatus(err, http.StatusNotFound))
 		return
 	}
 

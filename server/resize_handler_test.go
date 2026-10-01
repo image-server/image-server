@@ -56,9 +56,11 @@ func TestResizeHandlerCrop(t *testing.T) {
 func TestResizeHandlerRejectsInvalidCrop(t *testing.T) {
 	router := cropServer(t)
 	for _, filename := range []string{
-		"c0.390_0.000_0.050_0.500.jpg", // x0 > x1
-		"c0.05_0.000_1.000_0.500.jpg",  // two decimals
-		"c0.000_0.000_1.500_0.500.jpg", // out of range
+		"c0.390_0.000_0.050_0.500.jpg",  // x0 > x1
+		"c0.05_0.000_1.000_0.500.jpg",   // two decimals
+		"c0.000_0.000_1.500_0.500.jpg",  // out of range
+		"c0.000_0.000_+1.500_1.000.jpg", // sign
+		"c0.000_0.000_1e0_1.000.jpg",    // exponent
 	} {
 		response := getCrop(router, filename)
 		Equals(t, http.StatusBadRequest, response.Code)
@@ -70,4 +72,28 @@ func TestResizeHandlerRejectsCropSmallerThanAPixel(t *testing.T) {
 	response := getCrop(cropServer(t), "c0.500_0.000_0.501_1.000.jpg")
 	Equals(t, http.StatusBadRequest, response.Code)
 	Matches(t, "invalid crop", response.Body.String())
+}
+
+func postProcess(router http.Handler, outputs string) *httptest.ResponseRecorder {
+	uri := "/test_namespace/6e0/072/682/e66287b662827da75b244a3/process?outputs=" + outputs
+	request, _ := http.NewRequest("POST", uri, nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	return response
+}
+
+func TestResizeManyHandlerRejectsInvalidCrop(t *testing.T) {
+	router := cropServer(t)
+	Equals(t, http.StatusBadRequest, postProcess(router, "w50.jpg,c0.390_0.000_0.050_0.500.jpg").Code)
+	// Only detectable once the original's size is known
+	Equals(t, http.StatusBadRequest, postProcess(router, "c0.500_0.000_0.501_1.000.jpg").Code)
+	Equals(t, http.StatusOK, postProcess(router, "c0.000_0.000_1.000_0.500-w50.jpg").Code)
+}
+
+func TestNewImageHandlerRejectsInvalidCropOutput(t *testing.T) {
+	request, err := newUploadRequest("/test_namespace?outputs=x300.jpg,c0.390_0.000_0.050_0.500.jpg", "../test/images/a.jpg")
+	Ok(t, err)
+	response := httptest.NewRecorder()
+	cropServer(t).ServeHTTP(response, request)
+	Equals(t, http.StatusBadRequest, response.Code)
 }

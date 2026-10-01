@@ -23,9 +23,10 @@ func init() {
 	// Crop: c<x0>_<y0>_<x1>_<y1>[-w<N>][-q<N>].<ext>. Width and quality have no
 	// leading zeros so each crop has a single file name (and cache entry).
 	reC = regexp.MustCompile(`^c([0-9.]+)_([0-9.]+)_([0-9.]+)_([0-9.]+)(?:-w([1-9][0-9]{0,4}))?(?:-q([1-9][0-9]{0,2}))?\.(\w{3,5})$`)
-	// Names that look like a crop but don't match reC are rejected rather
-	// than served as custom file names
-	reCropLike = regexp.MustCompile(`^c[-0-9.]*_[-0-9.]*_[-0-9.]*_[-0-9.]*(?:[-.]|$)`)
+	// Names that look like a crop (c, a number-like start, four fields) but
+	// don't match reC are rejected rather than served uncropped as custom
+	// file names
+	reCropLike = regexp.MustCompile(`^c[-+.0-9][^_]*_[^_]*_[^_]*_`)
 	// Exactly three decimals, so each box has one file name (and one cache entry)
 	reCoord = regexp.MustCompile(`^(?:0\.[0-9]{3}|1\.000)$`)
 	// Custom file name i.e. original.png, some-image-name.png, my-file.png

@@ -108,8 +108,8 @@ GET http://localhost:7000/products/6e0/072/682/e66287b662827da75b244a3/c0.050_0.
 - The coordinates are the left, top, right and bottom edges as fractions of the image, measured on the upright image (EXIF orientation applied first, as in every other variant).
 - Each coordinate is written with exactly three decimals: `0.000` to `1.000`. This gives each region one file name, so it is processed and cached once.
 - Pixel edges are `floor(coordinate × size)`, so `1.000` reaches the edge of the image.
-- `-w` is a maximum width: the crop is scaled down to fit and never enlarged. Without `-w` the crop keeps its size.
-- Invalid boxes (wrong precision, outside 0–1, `x0 >= x1` or `y0 >= y1`, or smaller than one pixel on the original) return `400`.
+- `-w` is a maximum width (1–99999): the crop is scaled down to fit and never enlarged. Without `-w` the crop keeps its size. `-q` is 1–100. Neither takes leading zeros.
+- Invalid boxes (wrong precision, outside 0–1, `x0 >= x1` or `y0 >= y1`, or smaller than one pixel on the original) return `400`, also when listed in `outputs` for uploads and `/process`.
 
 Every distinct region creates a new file, locally and in remote storage. If URLs can be built by untrusted clients, enable [signed URLs](#signed-urls-authentication) with `--require-signature-for-reads`.
 

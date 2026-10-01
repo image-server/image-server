@@ -400,6 +400,31 @@ func TestVipsCropsMirroredOrientation(t *testing.T) {
 	Assert(t, isBlue(top.At(50, 50)), "upper half should be blue")
 }
 
+// Same cases as the ImageMagick processor: the first half of the upright
+// image along its long side. Stored 200×100 is left red, right blue.
+func TestVipsCropAllOrientations(t *testing.T) {
+	if !vips.Available {
+		t.Skip("vips not available, skipping tests")
+	}
+
+	for orientation, wantRed := range map[int]bool{1: true, 2: false, 3: false, 4: true, 5: true, 6: true, 7: false, 8: false} {
+		source := filepath.Join(t.TempDir(), "oriented.jpg")
+		WriteOrientedJPEG(t, source, 200, 100, orientation, binary.BigEndian)
+
+		crop := &core.CropBox{X0: 0, Y0: 0, X1: 1000, Y1: 500}
+		details := &info.ImageProperties{Width: 100, Height: 200}
+		if orientation <= 4 {
+			crop = &core.CropBox{X0: 0, Y0: 0, X1: 500, Y1: 1000}
+			details = &info.ImageProperties{Width: 200, Height: 100}
+		}
+		out := cropWithVips(t, source, &core.ImageConfiguration{Format: "jpg", Quality: 90, Crop: crop}, details)
+		Equals(t, 100, out.Bounds().Dx())
+		Equals(t, 100, out.Bounds().Dy())
+		Assert(t, isRed(out.At(50, 50)) == wantRed && isBlue(out.At(50, 50)) == !wantRed,
+			"orientation %d: expected red=%v", orientation, wantRed)
+	}
+}
+
 func TestVipsCropWidthShrinksOnly(t *testing.T) {
 	if !vips.Available {
 		t.Skip("vips not available, skipping tests")

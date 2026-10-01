@@ -69,6 +69,24 @@ func ResizeHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConf
 	http.ServeFile(w, req, localResizedPath)
 }
 
+// validateOutputs rejects malformed crop names before any work is done
+func validateOutputs(sc *core.ServerConfiguration, outputs []string) error {
+	for _, output := range outputs {
+		if _, err := parser.NameToConfiguration(sc, output); errors.Is(err, core.ErrInvalidCrop) {
+			return fmt.Errorf("%s: %w", output, err)
+		}
+	}
+	return nil
+}
+
+// errorStatus is 400 for invalid crops, otherwise the given status
+func errorStatus(err error, status int) int {
+	if errors.Is(err, core.ErrInvalidCrop) {
+		return http.StatusBadRequest
+	}
+	return status
+}
+
 func varsToHash(vars map[string]string) string {
 	return fmt.Sprintf("%s%s%s%s", vars["id1"], vars["id2"], vars["id3"], vars["id4"])
 }
