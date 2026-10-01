@@ -11,6 +11,9 @@ type ImageProperties struct {
 	Height      int    `json:"height"`
 	Width       int    `json:"width"`
 	ContentType string `json:"content_type"`
+	// Orientation is the EXIF orientation (1-8); 0 or 1 means upright. Not
+	// saved: Width and Height already report the upright size.
+	Orientation int `json:"-"`
 }
 
 // ImageDetailsToJSON returns a string with JSON representation of the ImageDetails

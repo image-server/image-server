@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/jpeg"
+	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -92,12 +94,16 @@ func TestImageWithCrop(t *testing.T) {
 }
 
 // convertCrop runs ImageMagick for real on a stored 200×100 JPEG (left red,
-// right blue) with the given EXIF orientation, upright 100×200
+// right blue) with the given EXIF orientation
 func convertCrop(t *testing.T, orientation, width int, crop *core.CropBox) image.Image {
-	return convertCropSized(t, orientation, width, crop, &info.ImageProperties{Width: 100, Height: 200})
+	t.Helper()
+	return convertOriented(t, orientation, &core.ImageConfiguration{Width: width, Format: "jpg", Quality: 90, Crop: crop})
 }
 
-func convertCropSized(t *testing.T, orientation, width int, crop *core.CropBox, details *info.ImageProperties) image.Image {
+// convertOriented runs ImageMagick for real on a stored 200×100 JPEG (left
+// red, right blue) with the given EXIF orientation. Details come from
+// info.ImageDetails, as in production.
+func convertOriented(t *testing.T, orientation int, ic *core.ImageConfiguration) image.Image {
 	t.Helper()
 	if _, err := exec.LookPath("convert"); err != nil {
 		t.Skip("ImageMagick not available")
@@ -105,13 +111,15 @@ func convertCropSized(t *testing.T, orientation, width int, crop *core.CropBox, 
 
 	dir := t.TempDir()
 	source := filepath.Join(dir, "rotated.jpg")
-	dest := filepath.Join(dir, "crop.jpg")
+	dest := filepath.Join(dir, "out.jpg")
 	WriteOrientedJPEG(t, source, 200, 100, orientation, binary.BigEndian)
+	details, err := info.Info{Path: source}.ImageDetails()
+	Ok(t, err)
 
 	p := cli.Processor{
 		Source:             source,
 		Destination:        dest,
-		ImageConfiguration: &core.ImageConfiguration{Width: width, Format: "jpg", Quality: 90, Crop: crop},
+		ImageConfiguration: ic,
 		ImageDetails:       details,
 	}
 	Ok(t, p.CreateImage())
@@ -156,19 +164,34 @@ func TestCropAppliesMirroredOrientation(t *testing.T) {
 // orientation. Stored 200×100 is left red, right blue.
 func TestCropAllOrientations(t *testing.T) {
 	for orientation, wantRed := range map[int]bool{1: true, 2: false, 3: false, 4: true, 5: true, 6: true, 7: false, 8: false} {
-		var out image.Image
+		// Upright 100×200: top half; upright 200×100: left half
+		crop := &core.CropBox{X0: 0, Y0: 0, X1: 1000, Y1: 500}
 		if orientation <= 4 {
-			// Upright 200×100: left half
-			out = convertCropSized(t, orientation, 0, &core.CropBox{X0: 0, Y0: 0, X1: 500, Y1: 1000},
-				&info.ImageProperties{Width: 200, Height: 100})
-		} else {
-			// Upright 100×200: top half
-			out = convertCrop(t, orientation, 0, &core.CropBox{X0: 0, Y0: 0, X1: 1000, Y1: 500})
+			crop = &core.CropBox{X0: 0, Y0: 0, X1: 500, Y1: 1000}
 		}
+		out := convertCrop(t, orientation, 0, crop)
 		Equals(t, 100, out.Bounds().Dx())
 		Equals(t, 100, out.Bounds().Dy())
 		Assert(t, isRed(out.At(50, 50)) == wantRed && isBlue(out.At(50, 50)) == !wantRed,
 			"orientation %d: expected red=%v", orientation, wantRed)
+	}
+}
+
+// A 100x100 center fill of every orientation. The first sample along the
+// upright image's long side shows the color that ends up on top (or left).
+func TestWidthAndHeightAllOrientations(t *testing.T) {
+	for orientation, wantRed := range map[int]bool{1: true, 2: false, 3: false, 4: true, 5: true, 6: true, 7: false, 8: false} {
+		ic := &core.ImageConfiguration{Width: 100, Height: 100, Format: "jpg", Quality: 90}
+		first, last := image.Pt(50, 10), image.Pt(50, 90)
+		if orientation <= 4 {
+			first, last = image.Pt(10, 50), image.Pt(90, 50)
+		}
+
+		out := convertOriented(t, orientation, ic)
+		Equals(t, 100, out.Bounds().Dx())
+		Equals(t, 100, out.Bounds().Dy())
+		Assert(t, isRed(out.At(first.X, first.Y)) == wantRed && isBlue(out.At(last.X, last.Y)) == wantRed,
+			"orientation %d: expected red first=%v", orientation, wantRed)
 	}
 }
 
@@ -189,4 +212,53 @@ func TestCropRejectsEmptyBox(t *testing.T) {
 	}
 	err := p.CreateImage()
 	Assert(t, errors.Is(err, core.ErrInvalidCrop), "expected ErrInvalidCrop, got %v", err)
+}
+
+// A GIF whose second frame sits at an offset (as optimized GIFs store
+// changes) must be flattened with its frames in place
+func TestGIFFrameOffsetsAreKept(t *testing.T) {
+	if _, err := exec.LookPath("convert"); err != nil {
+		t.Skip("ImageMagick not available")
+	}
+
+	dir := t.TempDir()
+	source := filepath.Join(dir, "frames.gif")
+	dest := filepath.Join(dir, "full_size.png")
+
+	palette := color.Palette{color.RGBA{R: 255, A: 255}, color.RGBA{B: 255, A: 255}}
+	frame := func(x, index int) *image.Paletted {
+		img := image.NewPaletted(image.Rect(x, 0, x+100, 100), palette)
+		for i := range img.Pix {
+			img.Pix[i] = uint8(index)
+		}
+		return img
+	}
+	f, err := os.Create(source)
+	Ok(t, err)
+	Ok(t, gif.EncodeAll(f, &gif.GIF{
+		Image:    []*image.Paletted{frame(0, 0), frame(100, 1)},
+		Delay:    []int{0, 0},
+		Disposal: []byte{gif.DisposalNone, gif.DisposalNone},
+		Config:   image.Config{ColorModel: palette, Width: 200, Height: 100},
+	}))
+	f.Close()
+
+	details, err := info.Info{Path: source}.ImageDetails()
+	Ok(t, err)
+	p := cli.Processor{
+		Source:             source,
+		Destination:        dest,
+		ImageConfiguration: &core.ImageConfiguration{Format: "png", Quality: 90},
+		ImageDetails:       details,
+	}
+	Ok(t, p.CreateImage())
+
+	out, err := os.Open(dest)
+	Ok(t, err)
+	defer out.Close()
+	img, err := png.Decode(out)
+	Ok(t, err)
+	Equals(t, 200, img.Bounds().Dx())
+	Assert(t, isRed(img.At(50, 50)), "left frame should be red")
+	Assert(t, isBlue(img.At(150, 50)), "right frame should be blue")
 }

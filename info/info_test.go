@@ -97,7 +97,8 @@ func TestImageDetailsOnPDF(t *testing.T) {
 }
 
 func TestImageDetailsToJSON(t *testing.T) {
-	d := &info.ImageProperties{"THISISAHASH", 10, 20, "image/jpeg"}
+	// Orientation is not saved: width and height are already upright
+	d := &info.ImageProperties{Hash: "THISISAHASH", Height: 10, Width: 20, ContentType: "image/jpeg", Orientation: 6}
 	json, err := info.ImageDetailsToJSON(d)
 	expected := "{\"hash\":\"THISISAHASH\",\"height\":10,\"width\":20,\"content_type\":\"image/jpeg\"}"
 	Ok(t, err)
@@ -106,7 +107,7 @@ func TestImageDetailsToJSON(t *testing.T) {
 
 func TestSaveImageDetail(t *testing.T) {
 	path := "../test/test-image-detail.json"
-	d := &info.ImageProperties{"THISISAHASH", 10, 20, "image/jpeg"}
+	d := &info.ImageProperties{Hash: "THISISAHASH", Height: 10, Width: 20, ContentType: "image/jpeg"}
 	info.SaveImageDetail(d, path)
 
 	fileBuffer, err := ioutil.ReadFile(path)
@@ -131,6 +132,7 @@ func TestImageDetailsReportsDisplayedSizeForRotatedJPEG(t *testing.T) {
 			WriteOrientedJPEG(t, path, 200, 100, orientation, order)
 			details, err := info.Info{Path: path}.ImageDetails()
 			Ok(t, err)
+			Equals(t, orientation, details.Orientation)
 			if swapped {
 				Equals(t, 100, details.Width)
 				Equals(t, 200, details.Height)
@@ -174,6 +176,7 @@ func TestImageDetailsReportsDisplayedSizeForRotatedPNGAndWebP(t *testing.T) {
 		for orientation, swapped := range map[int]bool{1: false, 6: true, 8: true} {
 			details, err := info.Info{Path: writeOriented(t, format, orientation)}.ImageDetails()
 			Ok(t, err)
+			Equals(t, orientation, details.Orientation)
 			if swapped {
 				Equals(t, 100, details.Width)
 				Equals(t, 200, details.Height)
@@ -193,9 +196,22 @@ func TestDetailsFromImageMagickReportsDisplayedSize(t *testing.T) {
 	Ok(t, err)
 	Equals(t, 100, details.Width)
 	Equals(t, 200, details.Height)
+	Equals(t, 6, details.Orientation)
+
+	details, err = info.Info{Path: writeOriented(t, "png", 7)}.DetailsFromImageMagick()
+	Ok(t, err)
+	Equals(t, 7, details.Orientation)
 
 	details, err = info.Info{Path: writeOriented(t, "png", 1)}.DetailsFromImageMagick()
 	Ok(t, err)
 	Equals(t, 200, details.Width)
 	Equals(t, 100, details.Height)
+}
+
+func TestDetailsFromVipsReportsOrientation(t *testing.T) {
+	details, err := info.Info{Path: writeOriented(t, "png", 7)}.DetailsFromVips()
+	Ok(t, err)
+	Equals(t, 100, details.Width)
+	Equals(t, 200, details.Height)
+	Equals(t, 7, details.Orientation)
 }

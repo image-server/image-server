@@ -35,7 +35,7 @@ func Process(sc *core.ServerConfiguration, namespace string, outputs []string, p
 		return err
 	}
 
-	item := Item{Hash: id.Hash, Width: id.Width, Height: id.Width}
+	item := Item{Hash: id.Hash, Width: id.Width, Height: id.Height}
 	fmt.Fprint(os.Stdout, item.ToTabDelimited())
 
 	return nil
