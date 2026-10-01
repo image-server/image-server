@@ -58,9 +58,10 @@ func (i Info) ImageDetails() (*ImageProperties, error) {
 				Height:      im.Height,
 				Width:       im.Width,
 				ContentType: contentType,
+				Orientation: i.orientation(reader, format),
 			}
 			// Report displayed size: processed outputs are auto-rotated.
-			if swapsAxes(i.orientation(reader, format)) {
+			if swapsAxes(details.Orientation) {
 				details.Width, details.Height = details.Height, details.Width
 			}
 		} else if i.ContentType == "image/svg+xml" {
@@ -128,8 +129,9 @@ func (i Info) DetailsFromVips() (*ImageProperties, error) {
 	}
 
 	width, height := img.Width(), img.Height()
+	orientation := img.Orientation()
 	// Report displayed size: processed outputs are auto-rotated.
-	if swapsAxes(img.Orientation()) {
+	if swapsAxes(orientation) {
 		width, height = height, width
 	}
 
@@ -137,6 +139,7 @@ func (i Info) DetailsFromVips() (*ImageProperties, error) {
 		Height:      height,
 		Width:       width,
 		ContentType: contentType,
+		Orientation: orientation,
 	}, nil
 }
 
@@ -202,8 +205,12 @@ func (i Info) DetailsFromImageMagick() (*ImageProperties, error) {
 		return nil, err
 	}
 
+	orientation := 1
+	if len(d) > 3 {
+		orientation = magickOrientation(d[3])
+	}
 	// Report displayed size: -auto-orient turns LeftTop..LeftBottom 90 degrees.
-	if len(d) > 3 && magickSwapsAxes(d[3]) {
+	if swapsAxes(orientation) {
 		w, h = h, w
 	}
 
@@ -211,6 +218,7 @@ func (i Info) DetailsFromImageMagick() (*ImageProperties, error) {
 		Height:      h,
 		Width:       w,
 		ContentType: contentType,
+		Orientation: orientation,
 	}, nil
 }
 
@@ -227,11 +235,13 @@ func getContentTypeFromExtension(format string) (string, error) {
 	return contentType, nil
 }
 
-// magickSwapsAxes is true for ImageMagick orientation names of EXIF 5-8.
-func magickSwapsAxes(orientation string) bool {
-	switch orientation {
-	case "LeftTop", "RightTop", "RightBottom", "LeftBottom":
-		return true
+// magickOrientation maps ImageMagick orientation names to EXIF values, 1 if
+// unknown.
+func magickOrientation(name string) int {
+	for i, n := range []string{"TopLeft", "TopRight", "BottomRight", "BottomLeft", "LeftTop", "RightTop", "RightBottom", "LeftBottom"} {
+		if n == name {
+			return i + 1
+		}
 	}
-	return false
+	return 1
 }

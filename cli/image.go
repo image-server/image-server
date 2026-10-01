@@ -31,11 +31,7 @@ func (iu *ImageUpload) Upload() error {
 	uploader := uploader.DefaultUploader(iu.ServerConfiguration)
 	remoteResizedPath := iu.ServerConfiguration.Adapters.Paths.RemoteImagePath(iu.Namespace, iu.Hash, iu.Filename)
 	log.Printf("uploading %s to remote: %s", iu.LocalPath, remoteResizedPath)
-	err := uploader.Upload(iu.LocalPath, remoteResizedPath, iu.ContentType)
-	if err != nil {
-		log.Println(err)
-	}
-	return nil
+	return uploader.Upload(iu.LocalPath, remoteResizedPath, iu.ContentType)
 }
 
 type ImageProcessor struct {
@@ -67,6 +63,11 @@ func (ip *ImageProcessor) ProcessMissing(sc *core.ServerConfiguration) error {
 }
 
 func (ip *ImageProcessor) ProcessOutput(sc *core.ServerConfiguration, filename string) error {
+	ic, err := parser.NameToConfiguration(sc, filename)
+	if err != nil {
+		return fmt.Errorf("Error parsing name %s: %w", filename, err)
+	}
+
 	// Buffered so the goroutine can finish after the path has been received
 	errc := make(chan error, 1)
 	go func() {
@@ -88,8 +89,11 @@ func (ip *ImageProcessor) ProcessOutput(sc *core.ServerConfiguration, filename s
 			Filename:            filename,
 			Namespace:           ip.Namespace,
 			Hash:                ip.Image.Hash,
+			ContentType:         ic.ToContentType(),
 		}
-		upload.Upload()
+		if err := upload.Upload(); err != nil {
+			return fmt.Errorf("uploading %s: %w", filename, err)
+		}
 	}
 
 	return nil

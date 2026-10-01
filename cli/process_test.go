@@ -58,9 +58,20 @@ func TestProcessReturnsParseErrors(t *testing.T) {
 	Assert(t, errors.Is(err, core.ErrInvalidCrop), "expected ErrInvalidCrop, got %v", err)
 }
 
-func TestProcessReturnsProcessingErrors(t *testing.T) {
+func TestProcessReturnsErrorsForUnreadableOriginal(t *testing.T) {
 	sc, original := cliConfiguration(t, "../test/images/empty.jpg")
 
 	err := cli.Process(sc, "p", []string{"w50.jpg"}, original)
 	Assert(t, err != nil, "expected an error for an unreadable original")
+}
+
+// The original is fine but the processor fails: the output can't be written
+func TestProcessReturnsProcessorErrors(t *testing.T) {
+	sc, original := cliConfiguration(t, "../test/images/wine.jpg")
+	dir := filepath.Dir(original)
+	Ok(t, os.Chmod(dir, 0500))
+	t.Cleanup(func() { os.Chmod(dir, 0700) })
+
+	err := cli.Process(sc, "p", []string{"w50.jpg"}, original)
+	Assert(t, err != nil, "expected an error when the output can't be written")
 }

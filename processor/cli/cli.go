@@ -54,9 +54,12 @@ func (p *Processor) CommandArgs() []string {
 
 	// Before -strip: apply EXIF orientation to pixels, then drop the tag.
 	args.PushBack("-auto-orient")
-	// -auto-orient can leave a page offset (e.g. orientation 7) that -crop
-	// and -extent would otherwise measure from
-	args.PushBack("+repage")
+	if p.ImageDetails != nil && p.ImageDetails.Orientation > 1 {
+		// Rotating can leave a page offset (orientation 7) that -flatten,
+		// -extent and -crop would measure from. Only for rotated images:
+		// GIF frames need their offsets to be flattened in place.
+		args.PushBack("+repage")
+	}
 	args.PushBack("-strip")
 
 	args.PushBack("-format")
@@ -67,6 +70,9 @@ func (p *Processor) CommandArgs() []string {
 	if ic.Crop != nil {
 		// Validated by CreateImage
 		cropLeft, cropTop, cropW, cropH, _ := p.cropRect()
+		// -auto-orient can leave a page offset (e.g. orientation 7) that
+		// -crop would otherwise measure from
+		args.PushBack("+repage")
 		args.PushBack("-crop")
 		args.PushBack(fmt.Sprintf("%dx%d+%d+%d", cropW, cropH, cropLeft, cropTop))
 		args.PushBack("+repage")
