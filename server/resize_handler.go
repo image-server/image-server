@@ -26,6 +26,10 @@ func ResizeHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConf
 	filename := vars["filename"]
 
 	ic, err := parser.NameToConfiguration(sc, filename)
+	if errors.Is(err, core.ErrInvalidCrop) {
+		errorHandlerJSON(err, w, http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		errorHandler(err, w, req, http.StatusNotFound)
 		return
@@ -51,6 +55,11 @@ func ResizeHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConf
 	}
 
 	err = ir.Process(ic)
+	if errors.Is(err, core.ErrInvalidCrop) {
+		// e.g. a box that rounds to zero pixels on this image
+		errorHandlerJSON(err, w, http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		errorHandlerJSON(err, w, http.StatusNotFound)
 		return

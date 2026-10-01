@@ -21,6 +21,12 @@ type Processor struct {
 }
 
 func (p *Processor) CreateImage() error {
+	if p.ImageConfiguration.Crop != nil {
+		if _, _, _, _, err := p.cropRect(); err != nil {
+			return err
+		}
+	}
+
 	tmpDir, err := ioutil.TempDir("", "magick")
 	if err != nil {
 		return err
@@ -55,7 +61,19 @@ func (p *Processor) CommandArgs() []string {
 
 	args.PushBack("-flatten")
 
-	if ic.Height > 0 && ic.Width > 0 {
+	if ic.Crop != nil {
+		// Validated by CreateImage
+		cropLeft, cropTop, cropW, cropH, _ := p.cropRect()
+		args.PushBack("-crop")
+		args.PushBack(fmt.Sprintf("%dx%d+%d+%d", cropW, cropH, cropLeft, cropTop))
+		args.PushBack("+repage")
+
+		if ic.Width > 0 {
+			// Trailing ">" only shrinks, never enlarges
+			args.PushBack("-resize")
+			args.PushBack(fmt.Sprintf("%d>", ic.Width))
+		}
+	} else if ic.Height > 0 && ic.Width > 0 {
 		cols := p.ImageDetails.Width
 		rows := p.ImageDetails.Height
 
@@ -95,6 +113,12 @@ func (p *Processor) CommandArgs() []string {
 	args.PushBack(destination)
 
 	return p.convertArgumentsToSlice(args)
+}
+
+// cropRect returns the crop in pixels. ImageDetails reports upright
+// dimensions, the same frame the crop coordinates refer to.
+func (p *Processor) cropRect() (left, top, width, height int, err error) {
+	return p.ImageConfiguration.Crop.PixelRect(p.ImageDetails.Width, p.ImageDetails.Height)
 }
 
 func (p *Processor) convertArgumentsToSlice(arguments *list.List) []string {

@@ -18,6 +18,8 @@ type ImageConfiguration struct {
 	Source    string
 	Quality   uint
 	Namespace string
+	// Crop, when set, is cut from the upright original before resizing
+	Crop *CropBox
 }
 
 // ToContentType returns the content type based on the image format
