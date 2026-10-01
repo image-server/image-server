@@ -21,7 +21,7 @@ import (
 func TestFullSizeImage(t *testing.T) {
 	ic := &core.ImageConfiguration{Width: 0, Height: 0, Format: "jpg", Quality: 85, Namespace: "test", ID: "ofrA", Filename: "full_size.jpg"}
 
-	expected := []string{"-auto-orient", "-strip", "-format", "jpg", "-flatten", "-background", "rgba(255,255,255,1)", "-quality", "85", "public/test/00/of/rA/original", "public/test/00/of/rA/full_size.jpg"}
+	expected := []string{"-auto-orient", "+repage", "-strip", "-format", "jpg", "-flatten", "-background", "rgba(255,255,255,1)", "-quality", "85", "public/test/00/of/rA/original", "public/test/00/of/rA/full_size.jpg"}
 	p := cli.Processor{
 		Source:             "public/test/00/of/rA/original",
 		Destination:        "public/test/00/of/rA/full_size.jpg",
@@ -34,7 +34,7 @@ func TestFullSizeImage(t *testing.T) {
 func TestImageWithWidth(t *testing.T) {
 	ic := &core.ImageConfiguration{Width: 600, Height: 0, Format: "jpg", Quality: 85, Namespace: "test", ID: "ofrA", Filename: "w600.jpg"}
 
-	expected := []string{"-auto-orient", "-strip", "-format", "jpg", "-flatten", "-resize", "600", "-background", "rgba(255,255,255,1)", "-quality", "85", "public/test/00/of/rA/original", "public/test/00/of/rA/w600.jpg"}
+	expected := []string{"-auto-orient", "+repage", "-strip", "-format", "jpg", "-flatten", "-resize", "600", "-background", "rgba(255,255,255,1)", "-quality", "85", "public/test/00/of/rA/original", "public/test/00/of/rA/w600.jpg"}
 
 	p := cli.Processor{
 		Source:             "public/test/00/of/rA/original",
@@ -49,7 +49,7 @@ func TestImageWithWidthAndHeight(t *testing.T) {
 	ic := &core.ImageConfiguration{Width: 600, Height: 500, Format: "jpg", Quality: 85, Namespace: "test", ID: "ofrA", Filename: "600x500.jpg"}
 	id := &info.ImageProperties{Width: 600, Height: 500}
 
-	expected := []string{"-auto-orient", "-strip", "-format", "jpg", "-flatten", "-extent", "600x500", "-gravity", "center", "-background", "rgba(255,255,255,1)", "-quality", "85", "public/test/00/of/rA/original", "public/test/00/of/rA/600x500.jpg"}
+	expected := []string{"-auto-orient", "+repage", "-strip", "-format", "jpg", "-flatten", "-extent", "600x500", "-gravity", "center", "-background", "rgba(255,255,255,1)", "-quality", "85", "public/test/00/of/rA/original", "public/test/00/of/rA/600x500.jpg"}
 
 	p := cli.Processor{
 		Source:             "public/test/00/of/rA/original",
@@ -72,7 +72,7 @@ func TestBlankImage(t *testing.T) {
 
 	err := p.CreateImage()
 	errorMsg := fmt.Sprintf("%s", err)
-	Equals(t, "ImageMagick failed to process the image: convert -auto-orient -strip -format jpg -flatten -resize 600 -background rgba(255,255,255,1) -quality 85 test/images/empty.jpg public/test/00/of/rA/empty.jpg", errorMsg)
+	Equals(t, "ImageMagick failed to process the image: convert -auto-orient +repage -strip -format jpg -flatten -resize 600 -background rgba(255,255,255,1) -quality 85 test/images/empty.jpg public/test/00/of/rA/empty.jpg", errorMsg)
 }
 
 func TestImageWithCrop(t *testing.T) {
@@ -80,7 +80,7 @@ func TestImageWithCrop(t *testing.T) {
 		Crop: &core.CropBox{X0: 50, Y0: 640, X1: 390, Y1: 920}}
 	id := &info.ImageProperties{Width: 3024, Height: 4032}
 
-	expected := []string{"-auto-orient", "-strip", "-format", "jpg", "-flatten", "+repage", "-crop", "1028x1129+151+2580", "+repage", "-resize", "100>", "-background", "rgba(255,255,255,1)", "-quality", "90", "original", "crop.jpg"}
+	expected := []string{"-auto-orient", "+repage", "-strip", "-format", "jpg", "-flatten", "-crop", "1028x1129+151+2580", "+repage", "-resize", "100>", "-background", "rgba(255,255,255,1)", "-quality", "90", "original", "crop.jpg"}
 
 	p := cli.Processor{
 		Source:             "original",
@@ -99,6 +99,13 @@ func convertCrop(t *testing.T, orientation, width int, crop *core.CropBox) image
 
 func convertCropSized(t *testing.T, orientation, width int, crop *core.CropBox, details *info.ImageProperties) image.Image {
 	t.Helper()
+	return convertOriented(t, orientation, &core.ImageConfiguration{Width: width, Format: "jpg", Quality: 90, Crop: crop}, details)
+}
+
+// convertOriented runs ImageMagick for real on a stored 200×100 JPEG (left
+// red, right blue) with the given EXIF orientation
+func convertOriented(t *testing.T, orientation int, ic *core.ImageConfiguration, details *info.ImageProperties) image.Image {
+	t.Helper()
 	if _, err := exec.LookPath("convert"); err != nil {
 		t.Skip("ImageMagick not available")
 	}
@@ -111,7 +118,7 @@ func convertCropSized(t *testing.T, orientation, width int, crop *core.CropBox, 
 	p := cli.Processor{
 		Source:             source,
 		Destination:        dest,
-		ImageConfiguration: &core.ImageConfiguration{Width: width, Format: "jpg", Quality: 90, Crop: crop},
+		ImageConfiguration: ic,
 		ImageDetails:       details,
 	}
 	Ok(t, p.CreateImage())
@@ -169,6 +176,26 @@ func TestCropAllOrientations(t *testing.T) {
 		Equals(t, 100, out.Bounds().Dy())
 		Assert(t, isRed(out.At(50, 50)) == wantRed && isBlue(out.At(50, 50)) == !wantRed,
 			"orientation %d: expected red=%v", orientation, wantRed)
+	}
+}
+
+// A 100x100 center fill of every orientation. The first sample along the
+// upright image's long side shows the color that ends up on top (or left).
+func TestWidthAndHeightAllOrientations(t *testing.T) {
+	for orientation, wantRed := range map[int]bool{1: true, 2: false, 3: false, 4: true, 5: true, 6: true, 7: false, 8: false} {
+		ic := &core.ImageConfiguration{Width: 100, Height: 100, Format: "jpg", Quality: 90}
+		details := &info.ImageProperties{Width: 100, Height: 200}
+		first, last := image.Pt(50, 10), image.Pt(50, 90)
+		if orientation <= 4 {
+			details = &info.ImageProperties{Width: 200, Height: 100}
+			first, last = image.Pt(10, 50), image.Pt(90, 50)
+		}
+
+		out := convertOriented(t, orientation, ic, details)
+		Equals(t, 100, out.Bounds().Dx())
+		Equals(t, 100, out.Bounds().Dy())
+		Assert(t, isRed(out.At(first.X, first.Y)) == wantRed && isBlue(out.At(last.X, last.Y)) == wantRed,
+			"orientation %d: expected red first=%v", orientation, wantRed)
 	}
 }
 

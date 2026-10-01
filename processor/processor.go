@@ -52,35 +52,51 @@ func (p *Processor) CreateImage() error {
 	return ipr.Error
 }
 
+// uniqueCreateImage generates the image once when several requests ask for
+// the same destination; the others wait for that result. Notifications are
+// only sent on success: callers stop reading the channels after an error.
 func (p *Processor) uniqueCreateImage(c chan ProcessorResult) {
 	key := p.Destination
-	_, present := ImageProcessings[key]
 
 	processingMutex.Lock()
-
-	if present {
-		ImageProcessings[key] = append(ImageProcessings[key], c)
-		processingMutex.Unlock()
-		p.notifySkipped()
-	} else {
-		ImageProcessings[key] = []chan ProcessorResult{c}
+	if waiters, present := ImageProcessings[key]; present {
+		// Buffered so the generating request never blocks on this waiter
+		wc := make(chan ProcessorResult, 1)
+		ImageProcessings[key] = append(waiters, wc)
 		processingMutex.Unlock()
 
-		processed, err := p.createIfNotAvailable()
-
-		for _, cc := range ImageProcessings[key] {
-			cc <- ProcessorResult{p.Destination, err}
-			close(cc)
-		}
-		processingMutex.Lock()
-		delete(ImageProcessings, key)
-		processingMutex.Unlock()
-
-		if processed {
-			p.notifyProcessed()
-		} else {
+		result := <-wc
+		c <- result
+		if result.Error == nil {
 			p.notifySkipped()
 		}
+		return
+	}
+	ImageProcessings[key] = []chan ProcessorResult{}
+	processingMutex.Unlock()
+
+	processed, err := p.createIfNotAvailable()
+	result := ProcessorResult{p.Destination, err}
+
+	// Removing the key under the same lock that waiters join under means no
+	// waiter can be added after the results are sent
+	processingMutex.Lock()
+	waiters := ImageProcessings[key]
+	delete(ImageProcessings, key)
+	processingMutex.Unlock()
+
+	for _, wc := range waiters {
+		wc <- result
+	}
+	c <- result
+
+	if err != nil {
+		return
+	}
+	if processed {
+		p.notifyProcessed()
+	} else {
+		p.notifySkipped()
 	}
 }
 

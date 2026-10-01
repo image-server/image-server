@@ -3,10 +3,10 @@ package cli
 import (
 	"fmt"
 	"log"
-	"os"
 	"regexp"
 
 	"github.com/image-server/image-server/core"
+	"github.com/image-server/image-server/info"
 	"github.com/image-server/image-server/parser"
 	"github.com/image-server/image-server/processor"
 	"github.com/image-server/image-server/uploader"
@@ -67,17 +67,18 @@ func (ip *ImageProcessor) ProcessMissing(sc *core.ServerConfiguration) error {
 }
 
 func (ip *ImageProcessor) ProcessOutput(sc *core.ServerConfiguration, filename string) error {
+	// Buffered so the goroutine can finish after the path has been received
+	errc := make(chan error, 1)
 	go func() {
-		err := ip.Image.ProcessOutput(sc, ip.Namespace, filename)
-		if err != nil {
-			log.Println("Something happened", err)
-			os.Exit(1)
-		}
+		errc <- ip.Image.ProcessOutput(sc, ip.Namespace, filename)
 	}()
 
 	// when Image.ProcessOutput puts something on the channel, take that info
-	// and run it through ImageUpload to upload it
+	// and run it through ImageUpload to upload it. It only returns before
+	// sending a path when it fails.
 	select {
+	case err := <-errc:
+		return err
 	case localImagePath := <-ip.channel:
 		// Hash                string
 
@@ -122,7 +123,12 @@ func (i *Image) ToHash() string {
 func (i *Image) ProcessOutput(sc *core.ServerConfiguration, namespace string, filename string) error {
 	ic, err := parser.NameToConfiguration(sc, filename)
 	if err != nil {
-		return fmt.Errorf("Error parsing name: %v\n", err)
+		return fmt.Errorf("Error parsing name %s: %w", filename, err)
+	}
+
+	details, err := (&info.Info{Path: i.LocalOriginalPath}).ImageDetails()
+	if err != nil {
+		return err
 	}
 
 	ic.Namespace = namespace
@@ -139,6 +145,7 @@ func (i *Image) ProcessOutput(sc *core.ServerConfiguration, namespace string, fi
 		Source:             i.LocalOriginalPath,
 		Destination:        localPath,
 		ImageConfiguration: ic,
+		ImageDetails:       details,
 		Channels:           pchan,
 	}
 
