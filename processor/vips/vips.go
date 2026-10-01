@@ -33,6 +33,17 @@ func (p *Processor) CreateImage() error {
 
 	ic := p.ImageConfiguration
 
+	// Crop coordinates refer to the upright image, so crop after AutoRotate
+	if ic.Crop != nil {
+		left, top, width, height, err := ic.Crop.PixelRect(image.Width(), image.Height())
+		if err != nil {
+			return err
+		}
+		if err := image.ExtractArea(left, top, width, height); err != nil {
+			return fmt.Errorf("vips failed to crop image: %w", err)
+		}
+	}
+
 	// Flatten alpha channel with white background (equivalent to -flatten)
 	if image.HasAlpha() {
 		bg := &vips.Color{R: 255, G: 255, B: 255}
@@ -86,6 +97,14 @@ func (p *Processor) CreateImage() error {
 				if err := image.EmbedBackground(embedLeft, embedTop, ic.Width, ic.Height, bg); err != nil {
 					return fmt.Errorf("vips failed to embed image: %w", err)
 				}
+			}
+		}
+	} else if ic.Crop != nil {
+		// Width is a maximum for crops: shrink only, never enlarge
+		if ic.Width > 0 && ic.Width < cols {
+			scale := float64(ic.Width) / float64(cols)
+			if err := image.Resize(scale, vips.KernelLanczos3); err != nil {
+				return fmt.Errorf("vips failed to resize image: %w", err)
 			}
 		}
 	} else if ic.Width > 0 {

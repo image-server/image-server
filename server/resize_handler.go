@@ -26,6 +26,10 @@ func ResizeHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConf
 	filename := vars["filename"]
 
 	ic, err := parser.NameToConfiguration(sc, filename)
+	if errors.Is(err, core.ErrInvalidCrop) {
+		errorHandlerJSON(err, w, http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		errorHandler(err, w, req, http.StatusNotFound)
 		return
@@ -51,6 +55,11 @@ func ResizeHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConf
 	}
 
 	err = ir.Process(ic)
+	if errors.Is(err, core.ErrInvalidCrop) {
+		// e.g. a box that rounds to zero pixels on this image
+		errorHandlerJSON(err, w, http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		errorHandlerJSON(err, w, http.StatusNotFound)
 		return
@@ -58,6 +67,24 @@ func ResizeHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConf
 
 	localResizedPath := sc.Adapters.Paths.LocalImagePath(ic.Namespace, ic.ID, ic.Filename)
 	http.ServeFile(w, req, localResizedPath)
+}
+
+// validateOutputs rejects malformed crop names before any work is done
+func validateOutputs(sc *core.ServerConfiguration, outputs []string) error {
+	for _, output := range outputs {
+		if _, err := parser.NameToConfiguration(sc, output); errors.Is(err, core.ErrInvalidCrop) {
+			return fmt.Errorf("%s: %w", output, err)
+		}
+	}
+	return nil
+}
+
+// errorStatus is 400 for invalid crops, otherwise the given status
+func errorStatus(err error, status int) int {
+	if errors.Is(err, core.ErrInvalidCrop) {
+		return http.StatusBadRequest
+	}
+	return status
 }
 
 func varsToHash(vars map[string]string) string {

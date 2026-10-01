@@ -50,6 +50,13 @@ func (r *Request) processImage(ic *core.ImageConfiguration) error {
 		return err
 	}
 
+	// Reject crops that select no pixels before handing off to the processor
+	if ic.Crop != nil {
+		if _, _, _, _, err := ic.Crop.PixelRect(id.Width, id.Height); err != nil {
+			return err
+		}
+	}
+
 	p := processor.Processor{
 		Source:             localOriginalPath,
 		Destination:        localResizedPath,

@@ -2,6 +2,9 @@ package vips_test
 
 import (
 	"encoding/binary"
+	"errors"
+	"image"
+	"image/color"
 	"image/jpeg"
 	"os"
 	"path/filepath"
@@ -330,4 +333,129 @@ func TestVipsAppliesExifOrientation(t *testing.T) {
 	_, _, bottom, _ := out.At(25, 90).RGBA()
 	Assert(t, top > 0xC000 && topBlue < 0x4000, "top should be red")
 	Assert(t, bottom > 0xC000, "bottom should be blue")
+}
+
+func cropWithVips(t *testing.T, source string, ic *core.ImageConfiguration, details *info.ImageProperties) image.Image {
+	t.Helper()
+	dest := filepath.Join(t.TempDir(), "crop.jpg")
+	p := vips.Processor{Source: source, Destination: dest, ImageConfiguration: ic, ImageDetails: details}
+	Ok(t, p.CreateImage())
+
+	f, err := os.Open(dest)
+	Ok(t, err)
+	defer f.Close()
+	out, err := jpeg.Decode(f)
+	Ok(t, err)
+	return out
+}
+
+func isRed(c color.Color) bool {
+	r, _, b, _ := c.RGBA()
+	return r > 0xC000 && b < 0x4000
+}
+
+func isBlue(c color.Color) bool {
+	r, _, b, _ := c.RGBA()
+	return b > 0xC000 && r < 0x4000
+}
+
+// Stored 200×100 (left red, right blue) with orientation 6 is upright 100×200,
+// red on top. The crop is measured on the upright image.
+func TestVipsCropsUprightImage(t *testing.T) {
+	if !vips.Available {
+		t.Skip("vips not available, skipping tests")
+	}
+
+	source := filepath.Join(t.TempDir(), "rotated.jpg")
+	WriteOrientedJPEG(t, source, 200, 100, 6, binary.BigEndian)
+	details := &info.ImageProperties{Width: 100, Height: 200}
+
+	top := cropWithVips(t, source, &core.ImageConfiguration{Format: "jpg", Quality: 90,
+		Crop: &core.CropBox{X0: 0, Y0: 0, X1: 1000, Y1: 500}}, details)
+	Equals(t, 100, top.Bounds().Dx())
+	Equals(t, 100, top.Bounds().Dy())
+	Assert(t, isRed(top.At(50, 10)) && isRed(top.At(50, 90)), "upper half should be red")
+
+	// Straddles the boundary: 100×100 starting at y=50
+	middle := cropWithVips(t, source, &core.ImageConfiguration{Format: "jpg", Quality: 90,
+		Crop: &core.CropBox{X0: 0, Y0: 250, X1: 1000, Y1: 750}}, details)
+	Equals(t, 100, middle.Bounds().Dy())
+	Assert(t, isRed(middle.At(50, 10)), "top of middle crop should be red")
+	Assert(t, isBlue(middle.At(50, 90)), "bottom of middle crop should be blue")
+}
+
+// Orientation 7 (transverse) puts the stored left half at the bottom
+func TestVipsCropsMirroredOrientation(t *testing.T) {
+	if !vips.Available {
+		t.Skip("vips not available, skipping tests")
+	}
+
+	source := filepath.Join(t.TempDir(), "transverse.jpg")
+	WriteOrientedJPEG(t, source, 200, 100, 7, binary.LittleEndian)
+
+	top := cropWithVips(t, source, &core.ImageConfiguration{Format: "jpg", Quality: 90,
+		Crop: &core.CropBox{X0: 0, Y0: 0, X1: 1000, Y1: 500}}, &info.ImageProperties{Width: 100, Height: 200})
+	Equals(t, 100, top.Bounds().Dx())
+	Equals(t, 100, top.Bounds().Dy())
+	Assert(t, isBlue(top.At(50, 50)), "upper half should be blue")
+}
+
+// Same cases as the ImageMagick processor: the first half of the upright
+// image along its long side. Stored 200×100 is left red, right blue.
+func TestVipsCropAllOrientations(t *testing.T) {
+	if !vips.Available {
+		t.Skip("vips not available, skipping tests")
+	}
+
+	for orientation, wantRed := range map[int]bool{1: true, 2: false, 3: false, 4: true, 5: true, 6: true, 7: false, 8: false} {
+		source := filepath.Join(t.TempDir(), "oriented.jpg")
+		WriteOrientedJPEG(t, source, 200, 100, orientation, binary.BigEndian)
+
+		crop := &core.CropBox{X0: 0, Y0: 0, X1: 1000, Y1: 500}
+		details := &info.ImageProperties{Width: 100, Height: 200}
+		if orientation <= 4 {
+			crop = &core.CropBox{X0: 0, Y0: 0, X1: 500, Y1: 1000}
+			details = &info.ImageProperties{Width: 200, Height: 100}
+		}
+		out := cropWithVips(t, source, &core.ImageConfiguration{Format: "jpg", Quality: 90, Crop: crop}, details)
+		Equals(t, 100, out.Bounds().Dx())
+		Equals(t, 100, out.Bounds().Dy())
+		Assert(t, isRed(out.At(50, 50)) == wantRed && isBlue(out.At(50, 50)) == !wantRed,
+			"orientation %d: expected red=%v", orientation, wantRed)
+	}
+}
+
+func TestVipsCropWidthShrinksOnly(t *testing.T) {
+	if !vips.Available {
+		t.Skip("vips not available, skipping tests")
+	}
+
+	crop := &core.CropBox{X0: 0, Y0: 0, X1: 500, Y1: 500} // 400×300 of wine.jpg
+	details := &info.ImageProperties{Width: 800, Height: 600}
+
+	shrunk := cropWithVips(t, "../../test/images/wine.jpg",
+		&core.ImageConfiguration{Width: 140, Format: "jpg", Quality: 90, Crop: crop}, details)
+	Equals(t, 140, shrunk.Bounds().Dx())
+	Equals(t, 105, shrunk.Bounds().Dy())
+
+	notEnlarged := cropWithVips(t, "../../test/images/wine.jpg",
+		&core.ImageConfiguration{Width: 1024, Format: "jpg", Quality: 90, Crop: crop}, details)
+	Equals(t, 400, notEnlarged.Bounds().Dx())
+	Equals(t, 300, notEnlarged.Bounds().Dy())
+}
+
+func TestVipsRejectsEmptyCrop(t *testing.T) {
+	if !vips.Available {
+		t.Skip("vips not available, skipping tests")
+	}
+
+	p := vips.Processor{
+		Source:      "../../test/images/wine.jpg",
+		Destination: filepath.Join(t.TempDir(), "empty.jpg"),
+		ImageConfiguration: &core.ImageConfiguration{Format: "jpg", Quality: 90,
+			Crop: &core.CropBox{X0: 500, Y0: 0, X1: 501, Y1: 1000}}, // 0.8px wide
+		ImageDetails: &info.ImageProperties{Width: 800, Height: 600},
+	}
+	err := p.CreateImage()
+	Assert(t, errors.Is(err, core.ErrInvalidCrop), "expected ErrInvalidCrop, got %v", err)
 }
