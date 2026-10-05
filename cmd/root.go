@@ -193,10 +193,11 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 		AWSBucket:      config.awsBucket,
 		AWSRegion:      config.awsRegion,
 
-		Outputs:             config.outputs,
-		DefaultQuality:      uint(config.defaultQuality),
-		UploaderConcurrency: uint(config.uploaderConcurrency),
-		HTTPTimeout:         httpTimeout,
+		Outputs:              config.outputs,
+		DefaultQuality:       uint(config.defaultQuality),
+		UploaderConcurrency:  uint(config.uploaderConcurrency),
+		ProcessorConcurrency: uint(config.processorConcurrency),
+		HTTPTimeout:          httpTimeout,
 
 		// Signature validation
 		SignatureConfig: sigConfig,
