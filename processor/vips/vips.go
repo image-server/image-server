@@ -19,17 +19,11 @@ type Processor struct {
 }
 
 func (p *Processor) CreateImage() error {
-	image, err := vips.NewImageFromFile(p.Source)
+	image, err := sources.acquire(p.Source)
 	if err != nil {
-		return fmt.Errorf("vips failed to load image: %w", err)
+		return err
 	}
 	defer image.Close()
-
-	// Bake EXIF orientation into pixels before resize/crop: metadata is
-	// stripped on export, so a tag-only rotation would otherwise be lost.
-	if err := image.AutoRotate(); err != nil {
-		return fmt.Errorf("vips failed to auto-rotate image: %w", err)
-	}
 
 	ic := p.ImageConfiguration
 
