@@ -3,6 +3,7 @@ package request
 import (
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/logger"
@@ -28,67 +29,72 @@ func (r *Request) ProcessMultiple() error {
 		return err
 	}
 
-	uploadQueue := make(chan *core.ImageConfiguration)
-	errorProcessingChannel := make(chan error)
-	uploadedChannel := make(chan error)
-	defer close(uploadedChannel)
-
 	if missing == nil {
 		// All the files are already uploaded. Nothing do do!
 		logger.AllImagesAlreadyProcessed(r.Namespace, r.Hash, r.SourceURL)
 		return nil
 	}
 
-	// Process all the outputs
-	go func() {
-		defer close(errorProcessingChannel)
-		for _, filename := range missing {
-			ic, err := parser.NameToConfiguration(r.ServerConfiguration, filename)
-			if err != nil {
-				errorProcessingChannel <- err
-				return
-			}
-			ic.Namespace = r.Namespace
-			ic.ID = r.Hash
-
-			err = r.Process(ic)
-			if err != nil {
-				errorProcessingChannel <- err
-				return
-			}
-			uploadQueue <- ic
-		}
-	}()
-
-	// Upload all the outputs in parallel. This might be sequential if the
-	// processing is slower than the uplaod
-	for range missing {
-		go func() {
-			var errU error
-			select {
-			case ic := <-uploadQueue:
-				localResizedPath := r.Paths.LocalImagePath(r.Namespace, r.Hash, ic.Filename)
-				remoteResizedPath := r.Paths.RemoteImagePath(ic.Namespace, ic.ID, ic.Filename)
-				errU = r.Uploader.Upload(localResizedPath, remoteResizedPath, ic.ToContentType())
-			case errP := <-errorProcessingChannel:
-				errU = errP
-			}
-			uploadedChannel <- errU
-		}()
+	// Outputs share the decoded original, so processing them side by side is
+	// cheap; the limit keeps a long list from taking every core
+	limit := 4
+	if r.ServerConfiguration.ProcessorConcurrency > 0 {
+		limit = int(r.ServerConfiguration.ProcessorConcurrency)
 	}
+	slots := make(chan struct{}, limit)
 
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 	var firstErr error
-	// wait till everything finishes, return on first error
-	for range missing {
-		select {
-		case err := <-uploadedChannel:
-			if err != nil && firstErr == nil {
-				firstErr = err
-			}
-		}
+	failed := func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return firstErr != nil
 	}
+
+	for _, filename := range missing {
+		wg.Add(1)
+		go func(filename string) {
+			defer wg.Done()
+			err := r.processAndUpload(filename, slots, failed)
+			if err != nil {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
+			}
+		}(filename)
+	}
+	wg.Wait()
 
 	return firstErr
+}
+
+// processAndUpload generates one output, holding a slot while processing,
+// then uploads it. It skips the work once another output has failed.
+func (r *Request) processAndUpload(filename string, slots chan struct{}, failed func() bool) error {
+	ic, err := parser.NameToConfiguration(r.ServerConfiguration, filename)
+	if err != nil {
+		return err
+	}
+	ic.Namespace = r.Namespace
+	ic.ID = r.Hash
+
+	slots <- struct{}{}
+	if failed() {
+		<-slots
+		return nil
+	}
+	err = r.Process(ic)
+	<-slots
+	if err != nil {
+		return err
+	}
+
+	localResizedPath := r.Paths.LocalImagePath(r.Namespace, r.Hash, ic.Filename)
+	remoteResizedPath := r.Paths.RemoteImagePath(ic.Namespace, ic.ID, ic.Filename)
+	return r.Uploader.Upload(localResizedPath, remoteResizedPath, ic.ToContentType())
 }
 
 // CalculateMissingOutputs determine what versions need to be generated
