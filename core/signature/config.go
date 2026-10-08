@@ -21,6 +21,10 @@ type Config struct {
 
 	// MaxTTL is the maximum allowed expiration window
 	MaxTTL time.Duration
+
+	// ExactPath requires the signed path to be the request path, not a
+	// prefix of it
+	ExactPath bool
 }
 
 // LoadSecretsFromFile reads signing secrets from a file (one per line)

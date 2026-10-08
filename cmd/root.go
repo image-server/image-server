@@ -13,6 +13,7 @@ import (
 	"github.com/image-server/image-server/logger/prometheus"
 	"github.com/image-server/image-server/logger/statsd"
 	"github.com/image-server/image-server/logger/webhook"
+	"github.com/image-server/image-server/namespaces"
 	"github.com/image-server/image-server/paths"
 	"github.com/image-server/image-server/uploader"
 	"github.com/spf13/cobra"
@@ -60,6 +61,11 @@ type configT struct {
 	requireSignatureForRead bool
 	signingSecretsFile      string
 	signatureMaxTTL         int
+
+	// Namespace rename and delete
+	allowNamespaceAdmin     bool
+	adminSigningSecretsFile string
+	deleteNamespacePattern  string
 
 	// Webhooks
 	webhookURL     string
@@ -176,6 +182,8 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 			sigConfig.RequireForReads, sigConfig.MaxTTL, len(sigConfig.Secrets))
 	}
 
+	namespaceAdmin := namespaceAdminConfiguration(uploader)
+
 	return &core.ServerConfiguration{
 		AllowedExtensions: allowedExtensions,
 		LocalBasePath:     config.localBasePath,
@@ -201,7 +209,48 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 
 		// Signature validation
 		SignatureConfig: sigConfig,
+
+		NamespaceAdmin: namespaceAdmin,
 	}
+}
+
+// namespaceAdminConfiguration returns nil unless --allow-namespace-admin is
+// set. It refuses to start without admin secrets, or with remote storage.
+func namespaceAdminConfiguration(uploader string) *core.NamespaceAdminConfiguration {
+	if !config.allowNamespaceAdmin {
+		return nil
+	}
+
+	var secrets []string
+	if config.adminSigningSecretsFile != "" {
+		var err error
+		secrets, err = signature.LoadSecretsFromFile(config.adminSigningSecretsFile)
+		if err != nil {
+			log.Fatalf("Failed to load admin signing secrets: %v", err)
+		}
+	}
+	if len(secrets) == 0 {
+		log.Fatal("--allow-namespace-admin requires secrets. Use --admin-signing-secrets-file")
+	}
+	if uploader != "noop" {
+		log.Fatal("--allow-namespace-admin requires local storage (--uploader noop)")
+	}
+
+	maxTTL := time.Duration(config.signatureMaxTTL) * time.Minute
+	if maxTTL == 0 {
+		maxTTL = time.Hour
+	}
+
+	ac := &core.NamespaceAdminConfiguration{Secrets: secrets, MaxTTL: maxTTL}
+	if config.deleteNamespacePattern != "" {
+		pattern, err := namespaces.CompileDeletePattern(config.deleteNamespacePattern)
+		if err != nil {
+			log.Fatalf("Invalid --delete-namespace-pattern: %v", err)
+		}
+		ac.DeletePattern = pattern
+	}
+	log.Printf("Namespace admin enabled (delete pattern: %q, secrets count: %d)", config.deleteNamespacePattern, len(secrets))
+	return ac
 }
 
 // initializeUploader creates base path on destination server

@@ -77,6 +77,11 @@ func (l *Logger) RequestLatency(handler string, since time.Time) {
 	l.metrics.requestLatency.WithLabelValues(handler).Observe(time.Since(since).Seconds())
 }
 
+// NamespaceAdmin counts namespace renames and deletes by result
+func (l *Logger) NamespaceAdmin(op string, result string, reason string) {
+	l.metrics.namespaceAdminMetric.WithLabelValues(op, result, reason).Inc()
+}
+
 // OriginalUploaded is called when an original image is uploaded
 func (l *Logger) OriginalUploaded(props *core.ImageProperties, namespace string) {
 	// Prometheus doesn't need to track individual uploads

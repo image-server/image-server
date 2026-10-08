@@ -20,6 +20,7 @@ type Metrics struct {
 	originalDownloadFailedMetric    prometheus.Counter
 	originalDownloadSkippedMetric   prometheus.Counter
 	requestLatency                  *prometheus.HistogramVec
+	namespaceAdminMetric            *prometheus.CounterVec
 }
 
 // CreateAndRegisterMetrics creates a struct of Metrics
@@ -128,6 +129,15 @@ func CreateAndRegisterMetrics() *Metrics {
 		[]string{"handler"},
 	)
 	prometheus.MustRegister(metrics.requestLatency)
+
+	metrics.namespaceAdminMetric = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "image_server_namespace_admin_total",
+			Help: "Namespace renames and deletes by op (rename, delete), result, and reason when rejected",
+		},
+		[]string{"op", "result", "reason"},
+	)
+	prometheus.MustRegister(metrics.namespaceAdminMetric)
 
 	return &metrics
 }

@@ -26,6 +26,7 @@ type Logger interface {
 	OriginalDownloadSkipped(source string)
 	RequestLatency(handler string, since time.Time)
 	OriginalUploaded(props *ImageProperties, namespace string)
+	NamespaceAdmin(op string, result string, reason string)
 }
 
 // Processor

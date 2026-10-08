@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/logger"
+	"github.com/image-server/image-server/namespaces"
 	"github.com/image-server/image-server/parser"
 	"github.com/image-server/image-server/request"
 	"github.com/image-server/image-server/uploader"
@@ -54,7 +55,9 @@ func ResizeHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConf
 		Hash:                ic.ID,
 	}
 
+	unlock := namespaces.ReadLock(ic.Namespace)
 	err = ir.Process(ic)
+	unlock()
 	if errors.Is(err, core.ErrInvalidCrop) {
 		// e.g. a box that rounds to zero pixels on this image
 		errorHandlerJSON(err, w, http.StatusBadRequest)
