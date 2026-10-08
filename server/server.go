@@ -47,6 +47,14 @@ func NewRouter(sc *core.ServerConfiguration) *mux.Router {
 		NewFileHandler(wr, req, sc)
 	}).Methods("POST").Name("newFile")
 
+	router.HandleFunc("/{namespace:[a-z0-9_-]+}/rename/{to:[a-z0-9_-]+}", func(wr http.ResponseWriter, req *http.Request) {
+		RenameNamespaceHandler(wr, req, sc)
+	}).Methods("POST").Name("renameNamespace")
+
+	router.HandleFunc("/{namespace:[a-z0-9_-]+}", func(wr http.ResponseWriter, req *http.Request) {
+		DeleteNamespaceHandler(wr, req, sc)
+	}).Methods("DELETE").Name("deleteNamespace")
+
 	admin := &AdminHandler{}
 	router.HandleFunc("/status_check", admin.ServeHTTP)
 	return router

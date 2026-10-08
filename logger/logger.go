@@ -78,6 +78,14 @@ func RequestLatency(handler string, since time.Time) {
 	}
 }
 
+// NamespaceAdmin records a namespace rename or delete and its result. reason
+// is set when the result is "rejected".
+func NamespaceAdmin(op string, result string, reason string) {
+	for _, logger := range Loggers {
+		go logger.NamespaceAdmin(op, result, reason)
+	}
+}
+
 func OriginalUploaded(props *core.ImageProperties, namespace string) {
 	for _, logger := range Loggers {
 		go logger.OriginalUploaded(props, namespace)

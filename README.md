@@ -214,6 +214,57 @@ Sign a path prefix to allow uploads to any path under it:
 # Allows only that exact path
 ```
 
+## Renaming and Deleting Namespaces
+
+Whole namespaces can be renamed or deleted. Both are off by default and only work with local storage (`--uploader noop`); with S3 they return `501`.
+
+```bash
+./image-server generate-secret > /etc/image-server/admin-secrets.txt
+
+./image-server server \
+  --uploader noop \
+  --allow-namespace-admin \
+  --admin-signing-secrets-file /etc/image-server/admin-secrets.txt \
+  --delete-namespace-pattern 'archive_[a-z0-9]+'
+```
+
+The server refuses to start with `--allow-namespace-admin` but no admin secrets.
+
+**Signing.** Requests use the [signed URL](#signed-urls-authentication) algorithm, but only the admin secrets are accepted (upload secrets are not), a signature is always required, and the signed path must equal the request path (no prefix signing). Signing `DELETE /products` does not allow `POST /products/rename/x`, or the other way round.
+
+**Rename** moves the namespace directory to a new name, atomically:
+
+```
+POST /{namespace}/rename/{to}
+200 {"from": "products", "to": "archived_products", "status": "renamed"}
+```
+
+- `200` with `"status": "missing"` when `{namespace}` does not exist, so a retry after a rename that succeeded is safe
+- `409` when `{to}` already exists
+- `400` when `{to}` is not a valid namespace name, is the same as `{namespace}`, or is reserved (`tmp`)
+
+**Delete** removes a namespace with every image in it, permanently. Only namespaces whose whole name matches `--delete-namespace-pattern` can be deleted; without a pattern, delete returns `404`.
+
+```
+DELETE /{namespace}
+200 {"namespace": "archive_2024", "status": "deleted", "images_deleted": 312, "files_deleted": 4120}
+```
+
+- `200` with `"status": "missing"` and zero counts when the namespace does not exist
+- `403` when the name does not match the pattern
+
+A renamed namespace is still served under its new name.
+
+Requests that are generating variants or uploading into a namespace finish before it is renamed or deleted, so nothing recreates the old directory. Both routes log one line per request, including the caller's `X-Request-Id`, and count requests in `image_server_namespace_admin_total{op, result}`.
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--allow-namespace-admin` | Enable renaming and deleting namespaces | `false` |
+| `--admin-signing-secrets-file` | Secrets for admin requests (one per line) | - |
+| `--delete-namespace-pattern` | Regex the whole name must match to delete | - (delete disabled) |
+
+Admin signatures use `--signature-max-ttl`.
+
 ## Webhooks
 
 Send HTTP notifications to external systems when images are uploaded or processed. Useful for triggering downstream workflows like OCR, ML pipelines, or cache invalidation.

@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/logger"
+	"github.com/image-server/image-server/namespaces"
 	"github.com/image-server/image-server/uploader"
 
 	"github.com/image-server/image-server/request"
@@ -37,7 +38,9 @@ func ResizeManyHandler(w http.ResponseWriter, req *http.Request, sc *core.Server
 		return
 	}
 
+	unlock := namespaces.ReadLock(ir.Namespace)
 	err := ir.ProcessMultiple()
+	unlock()
 	if err != nil {
 		errorHandlerJSON(err, w, errorStatus(err, http.StatusInternalServerError))
 		return

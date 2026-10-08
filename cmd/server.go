@@ -92,6 +92,11 @@ func init() {
 	serverCmd.Flags().StringVar(&config.signingSecretsFile, "signing-secrets-file", "", "Path to file containing signing secrets (one per line)")
 	serverCmd.Flags().IntVar(&config.signatureMaxTTL, "signature-max-ttl", 60, "Maximum allowed signature TTL in minutes")
 
+	// Namespace rename and delete
+	serverCmd.Flags().BoolVar(&config.allowNamespaceAdmin, "allow-namespace-admin", false, "Enable renaming and deleting namespaces (local storage only)")
+	serverCmd.Flags().StringVar(&config.adminSigningSecretsFile, "admin-signing-secrets-file", "", "Path to file with secrets for signing namespace admin requests (one per line)")
+	serverCmd.Flags().StringVar(&config.deleteNamespacePattern, "delete-namespace-pattern", "", "Regex the whole namespace name must match to be deleted (empty disables delete)")
+
 	// Webhooks
 	serverCmd.Flags().StringVar(&config.webhookURL, "webhook-url", "", "Webhook endpoint URL (enables webhooks when set)")
 	serverCmd.Flags().StringVar(&config.webhookSecret, "webhook-secret", "", "HMAC secret for signing webhook payloads")

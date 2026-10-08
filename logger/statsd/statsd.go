@@ -75,6 +75,14 @@ func (l *Logger) OriginalUploaded(props *core.ImageProperties, namespace string)
 	l.track("upload.original")
 }
 
+func (l *Logger) NamespaceAdmin(op string, result string, reason string) {
+	name := "namespace_" + op + "." + result
+	if reason != "" {
+		name += "." + reason
+	}
+	l.track(name)
+}
+
 func (l *Logger) track(name string) {
 	metric := fmt.Sprintf("%s_count", name)
 	l.statsd.Incr(metric, 1)

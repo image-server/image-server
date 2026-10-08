@@ -1,6 +1,7 @@
 package core
 
 import (
+	"regexp"
 	"strings"
 	"time"
 
@@ -30,6 +31,20 @@ type ServerConfiguration struct {
 
 	// Signature validation
 	SignatureConfig *signature.Config
+
+	// NamespaceAdmin is nil unless --allow-namespace-admin is set
+	NamespaceAdmin *NamespaceAdminConfiguration
+}
+
+// NamespaceAdminConfiguration holds the settings for renaming and deleting
+// namespaces
+type NamespaceAdminConfiguration struct {
+	// Secrets sign admin requests only; upload secrets are not accepted
+	Secrets []string
+	MaxTTL  time.Duration
+	// DeletePattern must match the whole namespace name for a delete; nil
+	// disables deleting
+	DeletePattern *regexp.Regexp
 }
 
 func (sc *ServerConfiguration) UploaderIsAws() bool {

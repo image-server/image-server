@@ -3,6 +3,8 @@ package vips
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,12 +28,14 @@ type sourceCache struct {
 }
 
 type sourceEntry struct {
-	ready    chan struct{} // closed once image or err is set
-	image    *vips.ImageRef
-	err      error
-	size     int64
-	refs     int
-	lastUsed time.Time
+	key       string
+	ready     chan struct{} // closed once image or err is set
+	image     *vips.ImageRef
+	err       error
+	size      int64
+	refs      int
+	lastUsed  time.Time
+	forgotten bool // file deleted: drop once the last variant is done
 }
 
 func newSourceCache(idleTTL time.Duration, maxBytes int64) *sourceCache {
@@ -60,7 +64,7 @@ func (c *sourceCache) acquire(path string) (*vips.ImageRef, error) {
 	c.mu.Lock()
 	e, ok := c.entries[key]
 	if !ok {
-		e = &sourceEntry{ready: make(chan struct{})}
+		e = &sourceEntry{key: key, ready: make(chan struct{})}
 		c.entries[key] = e
 	}
 	e.refs++
@@ -93,6 +97,9 @@ func (c *sourceCache) release(e *sourceEntry) {
 	c.mu.Lock()
 	e.refs--
 	e.lastUsed = time.Now()
+	if e.forgotten && e.refs == 0 && e.image != nil && c.entries[e.key] == e {
+		c.remove(e.key, e)
+	}
 	c.mu.Unlock()
 	c.evict(time.Now())
 }
@@ -130,6 +137,27 @@ func (c *sourceCache) remove(key string, e *sourceEntry) {
 	// Copies handed out hold their own libvips references, so closing here
 	// never frees pixels a variant is still using
 	e.image.Close()
+}
+
+// Forget drops the decoded originals of files under dir, which was deleted
+func Forget(dir string) {
+	sources.forget(dir)
+}
+
+func (c *sourceCache) forget(dir string) {
+	prefix := filepath.Clean(dir) + string(filepath.Separator)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for key, e := range c.entries {
+		if !strings.HasPrefix(filepath.Clean(key), prefix) {
+			continue
+		}
+		if e.refs > 0 || e.image == nil {
+			e.forgotten = true
+			continue
+		}
+		c.remove(key, e)
+	}
 }
 
 func loadUpright(path string) (*vips.ImageRef, error) {

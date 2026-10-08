@@ -61,6 +61,9 @@ func (v *Validator) ValidateRequest(r *http.Request) *Error {
 	if !isPathPrefix(signedPath, r.URL.Path) {
 		return ErrInvalidPath
 	}
+	if v.config.ExactPath && strings.TrimSuffix(signedPath, "/") != strings.TrimSuffix(r.URL.Path, "/") {
+		return ErrInvalidPath
+	}
 
 	// Build the string to sign
 	stringToSign := StringToSign(r.Method, signedPath, expires)

@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/logger"
+	"github.com/image-server/image-server/namespaces"
 	"github.com/image-server/image-server/request"
 	"github.com/image-server/image-server/uploader"
 	"github.com/unrolled/render"
@@ -37,7 +38,9 @@ func NewFileHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerCon
 		SourceData:          req.Body,
 	}
 
+	unlock := namespaces.ReadLock(namespace)
 	err := request.UploadFile(filename)
+	unlock()
 	if err != nil {
 		log.Println("Failed to upload file from", sourceURL, "-", err)
 		errorHandlerJSON(err, w, http.StatusNotFound)

@@ -198,6 +198,9 @@ func (l *Logger) RequestLatency(handler string, since time.Time) {
 	// No-op: latency metrics don't need webhooks
 }
 
+// NamespaceAdmin is a no-op: renames and deletes are requested by the client
+func (l *Logger) NamespaceAdmin(op string, result string, reason string) {}
+
 // OriginalUploaded is called when the original image is uploaded to storage
 // This is a new method added to support webhooks with full image details
 func (l *Logger) OriginalUploaded(props *core.ImageProperties, namespace string) {

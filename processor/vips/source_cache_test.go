@@ -167,3 +167,73 @@ func TestSourceCacheReloadsRewrittenFile(t *testing.T) {
 		t.Fatal("served the cached decode of the old file")
 	}
 }
+
+func TestSourceCacheForgetsDeletedDirectory(t *testing.T) {
+	if !Available {
+		t.Skip("vips not available, skipping tests")
+	}
+	c := newSourceCache(time.Hour, 512<<20)
+	path := copyFixture(t)
+	other := copyFixture(t)
+
+	img, err := c.acquire(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer img.Close()
+	kept, err := c.acquire(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept.Close()
+
+	c.forget(filepath.Dir(path))
+	if len(c.entries) != 1 {
+		t.Fatalf("entries=%d, want only the other directory's", len(c.entries))
+	}
+	// A copy handed out before still has its pixels
+	if _, _, err := img.ExportJpeg(vips.NewJpegExportParams()); err != nil {
+		t.Fatalf("copy unusable after forget: %v", err)
+	}
+}
+
+// An original still loading when its directory is deleted is dropped once
+// the load finishes, instead of staying cached
+func TestSourceCacheForgetsWhileLoading(t *testing.T) {
+	if !Available {
+		t.Skip("vips not available, skipping tests")
+	}
+	c := newSourceCache(time.Hour, 512<<20)
+	path := copyFixture(t)
+
+	loading := make(chan struct{})
+	finish := make(chan struct{})
+	original := loadSource
+	loadSource = func(p string) (*vips.ImageRef, error) {
+		close(loading)
+		<-finish
+		return original(p)
+	}
+	t.Cleanup(func() { loadSource = original })
+
+	done := make(chan error, 1)
+	go func() {
+		img, err := c.acquire(path)
+		if err == nil {
+			img.Close()
+		}
+		done <- err
+	}()
+	<-loading
+	c.forget(filepath.Dir(path))
+	close(finish)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.entries) != 0 || c.bytes != 0 {
+		t.Fatalf("entries=%d bytes=%d, want none", len(c.entries), c.bytes)
+	}
+}

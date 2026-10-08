@@ -10,6 +10,7 @@ import (
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/info"
 	"github.com/image-server/image-server/logger"
+	"github.com/image-server/image-server/namespaces"
 	"github.com/image-server/image-server/request"
 	"github.com/image-server/image-server/uploader"
 	"github.com/unrolled/render"
@@ -47,7 +48,9 @@ func NewImageHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerCo
 		ContentType:         contentType,
 	}
 
+	unlock := namespaces.ReadLock(namespace)
 	imageDetails, err := request.Create()
+	unlock()
 	if err != nil {
 		go logger.ImagePostingFailed()
 		log.Println("Failed to create image from", sourceURL, "-", err)

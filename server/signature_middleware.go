@@ -20,7 +20,7 @@ func NewSignatureMiddleware(config *signature.Config) *SignatureMiddleware {
 
 // ServeHTTP implements the negroni.Handler interface
 func (m *SignatureMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
-	if !m.validator.ShouldValidate(r) {
+	if isNamespaceAdminRequest(r) || !m.validator.ShouldValidate(r) {
 		next(w, r)
 		return
 	}
