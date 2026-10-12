@@ -31,24 +31,29 @@ func init() {
 func InitializeAdminServer(listen string, port string) {
 	log.Printf("starting data check server on http://%s:%s", listen, port)
 
+	srv := &graceful.Server{
+		Timeout: 30 * time.Second,
+		Server: &http.Server{
+			Addr:    listen + ":" + port,
+			Handler: NewAdminServerHandler(),
+		},
+	}
+
+	srv.ListenAndServe()
+}
+
+// NewAdminServerHandler serves the probes and metrics only. It must not
+// serve stored images: this port has no signature check.
+func NewAdminServerHandler() http.Handler {
 	router := mux.NewRouter()
 	admin := &AdminHandler{}
 	router.HandleFunc("/probe/ready", admin.ServeHTTP)
 	router.HandleFunc("/probe/live", admin.ServeHTTP)
 	router.Handle("/metrics", promhttp.Handler())
 
-	n := negroni.Classic()
+	n := negroni.New(negroni.NewRecovery(), negroni.NewLogger())
 	n.UseHandler(router)
-
-	srv := &graceful.Server{
-		Timeout: 30 * time.Second,
-		Server: &http.Server{
-			Addr:    listen + ":" + port,
-			Handler: n,
-		},
-	}
-
-	srv.ListenAndServe()
+	return n
 }
 
 var data = &AdminData{}

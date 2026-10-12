@@ -1,6 +1,7 @@
 package signature
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
@@ -297,4 +298,16 @@ func TestSigner_SignURL(t *testing.T) {
 // Helper to convert int64 to string
 func itoa(i int64) string {
 	return strconv.FormatInt(i, 10)
+}
+
+func TestShouldValidateTreatsHeadAsRead(t *testing.T) {
+	v := NewValidator(&Config{Enabled: true, Secrets: []string{"s"}})
+	head, _ := http.NewRequest(http.MethodHead, "/ns/a.jpg", nil)
+	if v.ShouldValidate(head) {
+		t.Fatal("HEAD validated although reads do not require signatures")
+	}
+	v = NewValidator(&Config{Enabled: true, RequireForReads: true, Secrets: []string{"s"}})
+	if !v.ShouldValidate(head) {
+		t.Fatal("HEAD not validated although reads require signatures")
+	}
 }
