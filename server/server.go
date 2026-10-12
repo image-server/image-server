@@ -15,16 +15,24 @@ import (
 func InitializeServer(sc *core.ServerConfiguration, listen string, port string) {
 	go InitializeAdminServer(listen, "7002")
 	log.Printf("starting server on http://%s:%s", listen, port)
-	router := NewRouter(sc)
-	n := negroni.Classic()
+	graceful.Run(listen+":"+port, 30*time.Second, NewHandler(sc, "public"))
+}
+
+// NewHandler returns the middleware stack and router. Files already in
+// staticDir (originals, info.json, rendered variants) are served directly,
+// but only after the signature check: serving them before it would let any
+// existing file be read without a signature.
+func NewHandler(sc *core.ServerConfiguration, staticDir string) http.Handler {
+	n := negroni.New(negroni.NewRecovery(), negroni.NewLogger())
 
 	// Add signature validation middleware if enabled
 	if sc.SignatureConfig != nil && sc.SignatureConfig.Enabled {
 		n.Use(NewSignatureMiddleware(sc.SignatureConfig))
 	}
 
-	n.UseHandler(router)
-	graceful.Run(listen+":"+port, 30*time.Second, n)
+	n.Use(negroni.NewStatic(http.Dir(staticDir)))
+	n.UseHandler(NewRouter(sc))
+	return n
 }
 
 // NewRouter creates a mux.Router for use in code or in tests

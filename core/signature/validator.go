@@ -90,8 +90,8 @@ func (v *Validator) ShouldValidate(r *http.Request) bool {
 		return false
 	}
 
-	// For GET requests, only validate if RequireForReads is enabled
-	if r.Method == http.MethodGet && !v.config.RequireForReads {
+	// For reads (GET, HEAD), only validate if RequireForReads is enabled
+	if (r.Method == http.MethodGet || r.Method == http.MethodHead) && !v.config.RequireForReads {
 		return false
 	}
 
