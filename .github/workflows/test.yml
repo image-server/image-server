@@ -1,0 +1,55 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # The SDK's default checksums, and with them turned off, which some
+        # S3-compatible stores need
+        checksums: [default, when_required]
+    services:
+      s3:
+        image: rustfs/rustfs:1.0.3
+        env:
+          RUSTFS_ACCESS_KEY: ci-access-key
+          RUSTFS_SECRET_KEY: ci-secret-key
+        ports:
+          - 9000:9000
+    env:
+      S3_INTEGRATION: "1"
+      AWS_ENDPOINT_URL_S3: http://localhost:9000
+      AWS_ACCESS_KEY_ID: ci-access-key
+      AWS_SECRET_ACCESS_KEY: ci-secret-key
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install libvips and ImageMagick
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libvips-dev imagemagick
+
+      - name: Turn off default checksums
+        if: matrix.checksums == 'when_required'
+        run: |
+          echo "AWS_REQUEST_CHECKSUM_CALCULATION=when_required" >> "$GITHUB_ENV"
+          echo "AWS_RESPONSE_CHECKSUM_VALIDATION=when_required" >> "$GITHUB_ENV"
+
+      - name: Wait for the S3 store
+        run: |
+          for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:9000/ && exit 0; sleep 1; done
+          echo "S3 store did not start"; exit 1
+
+      - name: Test
+        run: go test -race -count=1 ./...
