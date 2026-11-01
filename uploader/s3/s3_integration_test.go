@@ -43,3 +43,36 @@ func TestStoreUploadListDownload(t *testing.T) {
 		Assert(t, errors.Is(err, ErrNotFound), "got %v, want ErrNotFound", err)
 	}
 }
+
+func TestStoreListCopyDelete(t *testing.T) {
+	store := useStore(t, true)
+	u := &Uploader{}
+	deleteBatch = 2
+	t.Cleanup(func() { deleteBatch = 1000 })
+
+	for _, k := range []string{"ns/a/original", "ns/a/w1.jpg", "ns/b/original", "ns/b/c0.100_0.100_0.500_0.500-w10.jpg", "nsx/a/original"} {
+		Ok(t, u.Upload(writeFile(t, "data "+k), k, "image/png"))
+	}
+
+	keys, err := u.ListKeys("ns/")
+	Ok(t, err)
+	Equals(t, []string{"ns/a/original", "ns/a/w1.jpg", "ns/b/c0.100_0.100_0.500_0.500-w10.jpg", "ns/b/original"}, keys)
+
+	Ok(t, u.Copy("ns/b/c0.100_0.100_0.500_0.500-w10.jpg", "moved/b/c0.100_0.100_0.500_0.500-w10.jpg"))
+	Equals(t, "image/png", aws.ToString(store.Head(t, "moved/b/c0.100_0.100_0.500_0.500-w10.jpg").ContentType))
+
+	// Five keys in batches of two, one of them missing
+	Ok(t, u.DeleteKeys(append(keys, "ns/missing")))
+	left, err := u.ListKeys("ns")
+	Ok(t, err)
+	Equals(t, []string{"nsx/a/original"}, left)
+
+	Ok(t, u.PutBytes("ns/.marker", []byte(`{"from":"x"}`), "application/json"))
+	data, found, err := u.GetBytes("ns/.marker")
+	Ok(t, err)
+	Equals(t, true, found)
+	Equals(t, `{"from":"x"}`, string(data))
+	_, found, err = u.GetBytes("ns/none")
+	Ok(t, err)
+	Equals(t, false, found)
+}

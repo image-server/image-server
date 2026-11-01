@@ -13,6 +13,7 @@ import (
 	"github.com/image-server/image-server/core/signature"
 	"github.com/image-server/image-server/logger"
 	"github.com/image-server/image-server/namespaces"
+	"github.com/image-server/image-server/uploader/s3"
 	"github.com/unrolled/render"
 )
 
@@ -37,6 +38,13 @@ type renameResponse struct {
 	From   string `json:"from"`
 	To     string `json:"to"`
 	Status string `json:"status"`
+}
+
+type renameConflictResponse struct {
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Status string `json:"status"`
+	Error  string `json:"error"`
 }
 
 type deleteNamespaceResponse struct {
@@ -68,12 +76,21 @@ func RenameNamespaceHandler(w http.ResponseWriter, req *http.Request, sc *core.S
 		return
 	}
 
-	status, err := namespaces.Rename(sc.LocalBasePath, from, to)
+	status, err := namespaceStorage(sc).Rename(from, to)
 	if errors.Is(err, namespaces.ErrInvalidName) {
 		rejectNamespaceAdmin(w, req, "rename", rejectInvalidName, http.StatusBadRequest, err)
 		return
 	}
 	requestID := requestID(req)
+	if errors.Is(err, namespaces.ErrExists) {
+		// Both names exist: never overwrite the target
+		go logger.NamespaceAdmin("rename", "conflict", "")
+		log.Printf("Rename conflict from=%s to=%s request_id=%q: %v", from, to, requestID, err)
+		render.New(render.Options{IndentJSON: true}).JSON(w, http.StatusConflict, renameConflictResponse{
+			From: from, To: to, Status: "conflict", Error: err.Error(),
+		})
+		return
+	}
 	if err != nil {
 		go logger.NamespaceAdmin("rename", "error", "")
 		log.Printf("Rename failed from=%s to=%s request_id=%q: %v", from, to, requestID, err)
@@ -106,7 +123,7 @@ func DeleteNamespaceHandler(w http.ResponseWriter, req *http.Request, sc *core.S
 		return
 	}
 
-	result, err := namespaces.Delete(sc.LocalBasePath, namespace)
+	result, err := namespaceStorage(sc).Delete(namespace)
 	if errors.Is(err, namespaces.ErrInvalidName) {
 		rejectNamespaceAdmin(w, req, "delete", rejectInvalidName, http.StatusBadRequest, err)
 		return
@@ -149,15 +166,21 @@ func authorizeNamespaceAdmin(w http.ResponseWriter, req *http.Request, sc *core.
 		signature.WriteError(w, err)
 		return false
 	}
-
-	// S3 has no rename, and deleting only the local copy would leave the
-	// remote one
-	if sc.UploaderIsAws() {
-		rejectNamespaceAdmin(w, req, op, rejectDisabled, http.StatusNotImplemented, errors.New("namespace admin requires local storage (--uploader noop)"))
-		return false
-	}
 	return true
 }
+
+// namespaceStorage is local storage, plus the bucket with the S3 uploader
+func namespaceStorage(sc *core.ServerConfiguration) namespaces.Storage {
+	storage := namespaces.Storage{Root: sc.LocalBasePath}
+	if sc.UploaderIsAws() {
+		storage.Remote = namespaceRemote
+		storage.RemoteBase = sc.RemoteBasePath
+	}
+	return storage
+}
+
+// namespaceRemote is replaced in tests
+var namespaceRemote namespaces.Remote = &s3.Uploader{}
 
 // signedWithUploadSecret is true when the request carries a valid upload
 // signature: a caller using the wrong key, rather than a forged one

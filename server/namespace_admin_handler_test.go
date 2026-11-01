@@ -8,7 +8,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -152,12 +154,93 @@ func TestNamespaceAdminDisabled(t *testing.T) {
 	Equals(t, true, nsExists(sc, "test_namespace"))
 }
 
-func TestNamespaceAdminRefusesRemoteStorage(t *testing.T) {
-	router, sc := adminServer(t, ".*")
+// bucket is an in-memory namespaces.Remote
+type bucket struct {
+	mu      sync.Mutex
+	objects map[string][]byte
+}
+
+func (b *bucket) ListKeys(prefix string) ([]string, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var keys []string
+	for k := range b.objects {
+		if strings.HasPrefix(k, prefix) {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	return keys, nil
+}
+
+func (b *bucket) Copy(src, dst string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.objects[dst] = b.objects[src]
+	return nil
+}
+
+func (b *bucket) DeleteKeys(keys []string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for _, k := range keys {
+		delete(b.objects, k)
+	}
+	return nil
+}
+
+func (b *bucket) PutBytes(key string, data []byte, contentType string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.objects[key] = data
+	return nil
+}
+
+func (b *bucket) GetBytes(key string) ([]byte, bool, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	data, ok := b.objects[key]
+	return data, ok, nil
+}
+
+// With the S3 uploader, rename and delete act on the bucket
+func TestNamespaceAdminWithRemoteStorage(t *testing.T) {
+	router, sc := adminServer(t, "archive_.*")
 	sc.UploaderType = "s3"
-	Equals(t, http.StatusNotImplemented, serve(router, "POST", signed("POST", "/test_namespace/rename/x", adminSecret)).Code)
-	Equals(t, http.StatusNotImplemented, serve(router, "DELETE", signed("DELETE", "/test_namespace", adminSecret)).Code)
-	Equals(t, true, nsExists(sc, "test_namespace"))
+	sc.RemoteBasePath = "images"
+	b := &bucket{objects: map[string][]byte{
+		"images/test_namespace/6e0/072/682/e66287b662827da75b244a3/original": []byte("x"),
+		"images/test_namespace/6e0/072/682/e66287b662827da75b244a3/w50.jpg":  []byte("x"),
+		"images/other/6e0/072/682/e66287b662827da75b244a3/original":          []byte("x"),
+	}}
+	t.Cleanup(server.SetNamespaceRemote(b))
+
+	r := serve(router, "POST", signed("POST", "/test_namespace/rename/archive_1", adminSecret))
+	Equals(t, http.StatusOK, r.Code)
+	Matches(t, `"status": "renamed"`, r.Body.String())
+	keys, _ := b.ListKeys("images/")
+	Equals(t, []string{
+		"images/archive_1/6e0/072/682/e66287b662827da75b244a3/original",
+		"images/archive_1/6e0/072/682/e66287b662827da75b244a3/w50.jpg",
+		"images/other/6e0/072/682/e66287b662827da75b244a3/original",
+	}, keys)
+	Equals(t, false, nsExists(sc, "test_namespace"))
+
+	// Both names hold images
+	r = serve(router, "POST", signed("POST", "/other/rename/archive_1", adminSecret))
+	Equals(t, http.StatusConflict, r.Code)
+	Matches(t, `"status": "conflict"`, r.Body.String())
+	Matches(t, `"from": "other"`, r.Body.String())
+
+	r = serve(router, "DELETE", signed("DELETE", "/archive_1", adminSecret))
+	Equals(t, http.StatusOK, r.Code)
+	Matches(t, `"images_deleted": 1`, r.Body.String())
+	Matches(t, `"files_deleted": 2`, r.Body.String())
+	keys, _ = b.ListKeys("images/")
+	Equals(t, []string{"images/other/6e0/072/682/e66287b662827da75b244a3/original"}, keys)
+
+	r = serve(router, "DELETE", signed("DELETE", "/archive_1", adminSecret))
+	Matches(t, `"status": "missing"`, r.Body.String())
 }
 
 func TestDeleteNamespace(t *testing.T) {

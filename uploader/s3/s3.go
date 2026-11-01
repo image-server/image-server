@@ -1,13 +1,16 @@
 package s3
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -87,9 +90,7 @@ func (u *Uploader) Download(key string, destination string) error {
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		var noKey *types.NoSuchKey
-		var apiErr smithy.APIError
-		if errors.As(err, &noKey) || (errors.As(err, &apiErr) && apiErr.ErrorCode() == "NotFound") {
+		if isNotFound(err) {
 			return fmt.Errorf("%w: %s", ErrNotFound, key)
 		}
 		return err
@@ -163,4 +164,117 @@ func retryer() aws.Retryer {
 func initialize(bucketName string, cfg aws.Config, optFns ...func(*s3.Options)) {
 	svc = s3.NewFromConfig(cfg, optFns...)
 	bucket = bucketName
+}
+
+// deleteBatch is the most keys one DeleteObjects request may delete
+var deleteBatch = 1000
+
+// ListKeys returns every key under prefix
+func (u *Uploader) ListKeys(prefix string) ([]string, error) {
+	var keys []string
+	paginator := s3.NewListObjectsV2Paginator(svc, &s3.ListObjectsV2Input{
+		Bucket:  aws.String(bucket),
+		Prefix:  aws.String(prefix),
+		MaxKeys: aws.Int32(1000),
+	})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(context.Background())
+		if err != nil {
+			return keys, err
+		}
+		for _, entry := range page.Contents {
+			keys = append(keys, aws.ToString(entry.Key))
+		}
+	}
+	return keys, nil
+}
+
+// Copy copies the object at src to dst in the same bucket, keeping its
+// content type
+func (u *Uploader) Copy(src string, dst string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), uploadTimeout)
+	defer cancel()
+
+	segments := strings.Split(bucket+"/"+src, "/")
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
+	}
+	input := &s3.CopyObjectInput{
+		Bucket:     aws.String(bucket),
+		Key:        aws.String(dst),
+		CopySource: aws.String(strings.Join(segments, "/")),
+	}
+	// A copy does not keep the source's ACL
+	if !skipACL {
+		input.ACL = types.ObjectCannedACLPublicRead
+	}
+	_, err := svc.CopyObject(ctx, input)
+	return err
+}
+
+// DeleteKeys deletes keys, in batches of deleteBatch. Keys that do not
+// exist are not an error.
+func (u *Uploader) DeleteKeys(keys []string) error {
+	for start := 0; start < len(keys); start += deleteBatch {
+		end := start + deleteBatch
+		if end > len(keys) {
+			end = len(keys)
+		}
+		objects := make([]types.ObjectIdentifier, 0, end-start)
+		for _, key := range keys[start:end] {
+			objects = append(objects, types.ObjectIdentifier{Key: aws.String(key)})
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), uploadTimeout)
+		out, err := svc.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(bucket),
+			Delete: &types.Delete{Objects: objects, Quiet: aws.Bool(true)},
+		})
+		cancel()
+		if err != nil {
+			return err
+		}
+		for _, e := range out.Errors {
+			if aws.ToString(e.Code) == "NoSuchKey" {
+				continue
+			}
+			return fmt.Errorf("delete %s: %s: %s", aws.ToString(e.Key), aws.ToString(e.Code), aws.ToString(e.Message))
+		}
+	}
+	return nil
+}
+
+// PutBytes stores a small object
+func (u *Uploader) PutBytes(key string, data []byte, contentType string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), uploadTimeout)
+	defer cancel()
+	_, err := svc.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(bucket),
+		Key:         aws.String(key),
+		ContentType: aws.String(contentType),
+		Body:        bytes.NewReader(data),
+	})
+	return err
+}
+
+// GetBytes reads a small object; found is false when the key does not exist
+func (u *Uploader) GetBytes(key string) (data []byte, found bool, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), uploadTimeout)
+	defer cancel()
+	out, err := svc.GetObject(ctx, &s3.GetObjectInput{Bucket: aws.String(bucket), Key: aws.String(key)})
+	if err != nil {
+		if isNotFound(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	defer out.Body.Close()
+	data, err = io.ReadAll(out.Body)
+	return data, err == nil, err
+}
+
+func isNotFound(err error) bool {
+	var noKey *types.NoSuchKey
+	var apiErr smithy.APIError
+	return errors.As(err, &noKey) || (errors.As(err, &apiErr) && apiErr.ErrorCode() == "NotFound")
 }

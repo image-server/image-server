@@ -1,4 +1,5 @@
-// Package namespaces renames and deletes whole namespaces in local storage.
+// Package namespaces renames and deletes whole namespaces, in local storage
+// and in remote storage when it is configured.
 package namespaces
 
 import (
@@ -26,9 +27,22 @@ type Result struct {
 	Files  int
 }
 
-// Rename moves namespace from to to. It returns "renamed", or "missing" when
-// from does not exist, so a retry after a rename that succeeded is safe.
+// Rename moves a namespace in local storage. See Storage.Rename.
 func Rename(root, from, to string) (string, error) {
+	return Storage{Root: root}.Rename(from, to)
+}
+
+// Delete removes a namespace from local storage. See Storage.Delete.
+func Delete(root, namespace string) (Result, error) {
+	return Storage{Root: root}.Delete(namespace)
+}
+
+// Rename moves namespace from to to. It returns "renamed", or "missing" when
+// from does not exist, so a retry after a rename that succeeded is safe. An
+// existing target is ErrExists. With remote storage, an interrupted rename
+// is finished by retrying it.
+func (s Storage) Rename(from, to string) (string, error) {
+	root := s.Root
 	fromDir, err := dir(root, from)
 	if err != nil {
 		return "", err
@@ -50,6 +64,10 @@ func Rename(root, from, to string) (string, error) {
 	defer unlockFirst()
 	unlockSecond := lock(second, true)
 	defer unlockSecond()
+
+	if s.Remote != nil {
+		return s.renameRemote(from, to, fromDir, toDir)
+	}
 
 	if _, err := os.Lstat(fromDir); os.IsNotExist(err) {
 		return "missing", nil
@@ -73,13 +91,17 @@ func Rename(root, from, to string) (string, error) {
 
 // Delete removes a namespace with every image in it. Deleting a namespace
 // that does not exist returns status "missing".
-func Delete(root, namespace string) (Result, error) {
-	nsDir, err := dir(root, namespace)
+func (s Storage) Delete(namespace string) (Result, error) {
+	nsDir, err := dir(s.Root, namespace)
 	if err != nil {
 		return Result{}, err
 	}
 	unlock := lock(namespace, true)
 	defer unlock()
+
+	if s.Remote != nil {
+		return s.deleteRemote(namespace, nsDir)
+	}
 
 	info, err := os.Lstat(nsDir)
 	if os.IsNotExist(err) {

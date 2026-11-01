@@ -216,7 +216,7 @@ Sign a path prefix to allow uploads to any path under it:
 
 ## Renaming and Deleting Namespaces
 
-Whole namespaces can be renamed or deleted. Both are off by default and only work with local storage (`--uploader noop`); with S3 they return `501`.
+Whole namespaces can be renamed or deleted, in local storage and, with the S3 uploader, in the bucket. Both are off by default.
 
 ```bash
 ./image-server generate-secret > /etc/image-server/admin-secrets.txt
@@ -232,7 +232,7 @@ The server refuses to start with `--allow-namespace-admin` but no admin secrets.
 
 **Signing.** Requests use the [signed URL](#signed-urls-authentication) algorithm, but only the admin secrets are accepted (upload secrets are not), a signature is always required, and the signed path must equal the request path (no prefix signing). Signing `DELETE /products` does not allow `POST /products/rename/x`, or the other way round.
 
-**Rename** moves the namespace directory to a new name, atomically:
+**Rename** moves a namespace to a new name:
 
 ```
 POST /{namespace}/rename/{to}
@@ -240,8 +240,10 @@ POST /{namespace}/rename/{to}
 ```
 
 - `200` with `"status": "missing"` when `{namespace}` does not exist, so a retry after a rename that succeeded is safe
-- `409` when `{to}` already exists
+- `409` with `"status": "conflict"` when `{to}` already exists; the target is never overwritten
 - `400` when `{to}` is not a valid namespace name, is the same as `{namespace}`, or is reserved (`tmp`)
+
+With local storage the rename is a single atomic directory rename. S3 has no rename, so the server copies every object to the new name, then deletes the old ones; this takes longer for large namespaces. While it runs, a `{to}/.rename.json` marker names the source. If the rename stops part way (an error or a restart), retrying the same rename finishes it and returns `renamed`, without copying again what was already copied; the partial target is not taken for an existing namespace. Requests to either namespace wait until the rename is done.
 
 **Delete** removes a namespace with every image in it, permanently. Only namespaces whose whole name matches `--delete-namespace-pattern` can be deleted; without a pattern, delete returns `404`.
 
@@ -251,11 +253,12 @@ DELETE /{namespace}
 ```
 
 - `200` with `"status": "missing"` and zero counts when the namespace does not exist
+- With S3, objects are deleted in batches of 1,000, then the local copies; a retry after a failure deletes what is left
 - `403` when the name does not match the pattern
 
 A renamed namespace is still served under its new name.
 
-Requests that are generating variants or uploading into a namespace finish before it is renamed or deleted, so nothing recreates the old directory. Both routes log one line per request, including the caller's `X-Request-Id`, and count requests in `image_server_namespace_admin_total{op, result}`.
+Requests that are generating variants or uploading into a namespace, including variant uploads that continue after the response, finish before it is renamed or deleted, so nothing recreates the old namespace. This coordination is within one server process: run one server per storage location while renaming or deleting. Both routes log one line per request, including the caller's `X-Request-Id`, and count requests in `image_server_namespace_admin_total{op, result}`.
 
 | Flag | Description | Default |
 |------|-------------|---------|

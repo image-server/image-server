@@ -6,6 +6,7 @@ import (
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/fetcher"
 	"github.com/image-server/image-server/info"
+	"github.com/image-server/image-server/namespaces"
 	"github.com/image-server/image-server/processor"
 )
 
@@ -73,7 +74,13 @@ func (r *Request) processImage(ic *core.ImageConfiguration) error {
 	select {
 	case <-pchan.ImageProcessed:
 		log.Printf("Processed (resize handler) %s", localResizedPath)
-		go r.uploadResizedImage(localResizedPath, ic)
+		// Registered before the request releases the namespace, so a rename
+		// or delete waits for this upload
+		done := namespaces.TrackUpload(r.Namespace)
+		go func() {
+			defer done()
+			r.uploadResizedImage(localResizedPath, ic)
+		}()
 
 	case <-pchan.Skipped:
 		log.Printf("Skipped processing (resize handler) %s", localResizedPath)
