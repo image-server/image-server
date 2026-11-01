@@ -53,3 +53,8 @@ jobs:
 
       - name: Test
         run: go test -race -count=1 ./...
+
+      - name: Check the S3 integration tests ran
+        run: |
+          go test -count=1 -v -run 'Store|S3' ./uploader/s3/ ./namespaces/ ./server/ | tee s3-tests.txt | grep -E '^(--- |ok|FAIL)'
+          if grep -q -- '--- SKIP' s3-tests.txt; then echo "S3 integration tests were skipped"; exit 1; fi
