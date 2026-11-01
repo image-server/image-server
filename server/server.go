@@ -30,6 +30,10 @@ func NewHandler(sc *core.ServerConfiguration, staticDir string) http.Handler {
 		n.Use(NewSignatureMiddleware(sc.SignatureConfig))
 	}
 
+	if sc.CacheControl != "" || sc.CacheTagHeader != "" {
+		n.Use(&CacheHeaders{CacheControl: sc.CacheControl, TagHeader: sc.CacheTagHeader})
+	}
+
 	n.Use(negroni.NewStatic(http.Dir(staticDir)))
 	n.UseHandler(NewRouter(sc))
 	return n

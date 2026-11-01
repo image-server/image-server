@@ -30,7 +30,8 @@ var serverCmd = &cobra.Command{
 			return err
 		}
 
-		go initializeUploader(sc)
+		// Before serving: requests must not see an uninitialized S3 client
+		initializeUploader(sc)
 
 		if config.uploaderType != "noop" {
 		  go file_garbage_collector.Start(sc)
@@ -68,6 +69,13 @@ func init() {
 	serverCmd.Flags().StringVar(&config.awsSecretKey, "aws_secret_key", "", "S3 Secret")
 	serverCmd.Flags().StringVar(&config.awsBucket, "aws_bucket", "", "S3 Bucket")
 	serverCmd.Flags().StringVar(&config.awsRegion, "aws_region", "", "S3 Region")
+	serverCmd.Flags().BoolVar(&config.awsPathStyle, "aws_use_path_style", false, "Address the bucket in the URL path (endpoint/bucket/key), as most S3-compatible stores expect")
+	serverCmd.Flags().BoolVar(&config.awsSkipACL, "aws_skip_acl", false, "Upload without the public-read ACL, for private buckets and stores that reject ACLs")
+	serverCmd.Flags().BoolVar(&config.s3Reads, "s3_reads", false, "Read files missing locally from the bucket with the S3 credentials, instead of over HTTP from --remote_base_url")
+
+	// Caching
+	serverCmd.Flags().StringVar(&config.cacheControl, "cache_control", "", "Cache-Control header for successful image reads, e.g. 'public, max-age=31536000, immutable' (empty: none)")
+	serverCmd.Flags().StringVar(&config.cacheTagHeader, "cache_tag_header", "", "Header that carries the namespace on successful image reads, e.g. Cache-Tag (empty: none)")
 
 	// Default image settings
 	serverCmd.Flags().IntVar(&config.maximumWidth, "maximum_width", 1000, "Maximum image width")

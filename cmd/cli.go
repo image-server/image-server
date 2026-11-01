@@ -106,6 +106,8 @@ func init() {
 	cmdCli.Flags().StringVar(&config.awsSecretKey, "aws_secret_key", "", "S3 Secret")
 	cmdCli.Flags().StringVar(&config.awsBucket, "aws_bucket", "", "S3 Bucket")
 	cmdCli.Flags().StringVar(&config.awsRegion, "aws_region", "", "S3 Region")
+	cmdCli.Flags().BoolVar(&config.awsPathStyle, "aws_use_path_style", false, "Address the bucket in the URL path (endpoint/bucket/key), as most S3-compatible stores expect")
+	cmdCli.Flags().BoolVar(&config.awsSkipACL, "aws_skip_acl", false, "Upload without the public-read ACL, for private buckets and stores that reject ACLs")
 
 	// Default image settings
 	cmdCli.Flags().IntVar(&config.maximumWidth, "maximum_width", 1000, "Maximum image width")

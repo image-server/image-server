@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/image-server/image-server/core"
+	"github.com/image-server/image-server/fetcher"
 	"github.com/image-server/image-server/logger"
 	"github.com/image-server/image-server/namespaces"
 	"github.com/image-server/image-server/parser"
@@ -25,6 +26,11 @@ func ResizeHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConf
 
 	vars := mux.Vars(req)
 	filename := vars["filename"]
+
+	if filename == infoFilename {
+		serveStoredInfo(w, req, sc, vars)
+		return
+	}
 
 	ic, err := parser.NameToConfiguration(sc, filename)
 	if errors.Is(err, core.ErrInvalidCrop) {
@@ -70,6 +76,23 @@ func ResizeHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConf
 
 	localResizedPath := sc.Adapters.Paths.LocalImagePath(ic.Namespace, ic.ID, ic.Filename)
 	http.ServeFile(w, req, localResizedPath)
+}
+
+const infoFilename = "info.json"
+
+// serveStoredInfo serves info.json, fetching it from remote storage when it
+// is not on disk (e.g. after local files expire). It is never generated.
+func serveStoredInfo(w http.ResponseWriter, req *http.Request, sc *core.ServerConfiguration, vars map[string]string) {
+	ic := &core.ImageConfiguration{
+		Namespace: vars["namespace"],
+		ID:        varsToHash(vars),
+		Filename:  infoFilename,
+	}
+	if err := fetcher.NewProcessedFetcher(sc.Adapters.Paths).Fetch(ic); err != nil {
+		errorHandler(errors.New("Not Found"), w, req, http.StatusNotFound)
+		return
+	}
+	http.ServeFile(w, req, sc.Adapters.Paths.LocalImagePath(ic.Namespace, ic.ID, ic.Filename))
 }
 
 // validateOutputs rejects malformed crop names before any work is done

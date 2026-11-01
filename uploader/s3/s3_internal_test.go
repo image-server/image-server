@@ -1,12 +1,14 @@
 package s3
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -126,4 +128,86 @@ func TestListDirectoryError(t *testing.T) {
 	})
 	_, err := (&Uploader{}).ListDirectory("ns/abc")
 	Assert(t, err != nil, "expected AccessDenied error")
+}
+
+func TestUploadSkipsACL(t *testing.T) {
+	var got *http.Request
+	useFakeS3(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r
+		io.Copy(io.Discard, r.Body)
+	})
+	skipACL = true
+	t.Cleanup(func() { skipACL = false })
+
+	Ok(t, (&Uploader{}).Upload(writeFile(t, "x"), "k.jpg", "image/jpeg"))
+	Equals(t, "", got.Header.Get("X-Amz-Acl"))
+}
+
+// Initialize reads the endpoint and credentials from the environment, and
+// UsePathStyle puts the bucket in the path
+func TestInitializeWithCustomEndpointAndPathStyle(t *testing.T) {
+	var got *http.Request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r
+		io.Copy(io.Discard, r.Body)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("AWS_CONFIG_FILE", filepath.Join(t.TempDir(), "none"))
+	t.Setenv("AWS_SHARED_CREDENTIALS_FILE", filepath.Join(t.TempDir(), "none"))
+	t.Setenv("AWS_ENDPOINT_URL_S3", srv.URL)
+	t.Setenv("AWS_ACCESS_KEY_ID", "key")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "secret")
+
+	Initialize("store-bucket", "us-east-1", Options{UsePathStyle: true, SkipACL: true})
+	t.Cleanup(func() { skipACL = false })
+
+	Ok(t, (&Uploader{}).Upload(writeFile(t, "x"), "ns/a/original", "image/jpeg"))
+	Equals(t, "/store-bucket/ns/a/original", got.URL.Path)
+	Equals(t, "", got.Header.Get("X-Amz-Acl"))
+	Assert(t, strings.Contains(got.Header.Get("Authorization"), "Credential=key/"), "request not signed with the env credentials")
+}
+
+func TestDownloadWritesObject(t *testing.T) {
+	var got *http.Request
+	useFakeS3(t, func(w http.ResponseWriter, r *http.Request) {
+		got = r
+		fmt.Fprint(w, "image bytes")
+	})
+
+	dest := filepath.Join(t.TempDir(), "ns", "abc", "original")
+	Ok(t, (&Uploader{}).Download("ns/abc/original", dest))
+	Equals(t, http.MethodGet, got.Method)
+	Equals(t, "/test-bucket/ns/abc/original", got.URL.Path)
+	Assert(t, strings.Contains(got.Header.Get("Authorization"), "AWS4-HMAC-SHA256"), "read is not signed")
+	data, err := os.ReadFile(dest)
+	Ok(t, err)
+	Equals(t, "image bytes", string(data))
+}
+
+func TestDownloadMissingKey(t *testing.T) {
+	useFakeS3(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `<Error><Code>NoSuchKey</Code><Message>missing</Message></Error>`)
+	})
+
+	dir := t.TempDir()
+	err := (&Uploader{}).Download("ns/abc/w100.jpg", filepath.Join(dir, "w100.jpg"))
+	Assert(t, errors.Is(err, ErrNotFound), "got %v, want ErrNotFound", err)
+	entries, _ := os.ReadDir(dir)
+	Equals(t, 0, len(entries))
+}
+
+// A failed transfer leaves no partial file behind
+func TestDownloadLeavesNoPartialFile(t *testing.T) {
+	useFakeS3(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1000")
+		fmt.Fprint(w, "short")
+	})
+
+	dir := t.TempDir()
+	err := (&Uploader{}).Download("k", filepath.Join(dir, "original"))
+	Assert(t, err != nil, "expected an error for a truncated body")
+	entries, _ := os.ReadDir(dir)
+	Equals(t, 0, len(entries))
 }
