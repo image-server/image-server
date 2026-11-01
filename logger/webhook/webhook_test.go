@@ -249,6 +249,9 @@ func TestWebhookEventFiltering(t *testing.T) {
 }
 
 func TestWebhookRetry(t *testing.T) {
+	retryUnit = 10 * time.Millisecond
+	t.Cleanup(func() { retryUnit = time.Second })
+
 	var mu sync.Mutex
 	requestCount := 0
 
@@ -281,8 +284,18 @@ func TestWebhookRetry(t *testing.T) {
 
 	logger.OriginalUploaded(&core.ImageProperties{Hash: "abc123"}, "test")
 
-	// Wait for retries (1s + 4s backoff + processing time)
-	time.Sleep(6 * time.Second)
+	// Wait for the retries, then make sure no extra request follows
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		mu.Lock()
+		count := requestCount
+		mu.Unlock()
+		if count >= 3 || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond)
 
 	mu.Lock()
 	if requestCount != 3 {

@@ -19,6 +19,9 @@ const (
 	userAgent       = "image-server-webhook/1.0"
 )
 
+// retryUnit scales the backoff between attempts; tests shorten it
+var retryUnit = time.Second
+
 // Config holds the webhook configuration
 type Config struct {
 	URL     string
@@ -81,8 +84,7 @@ func (l *Logger) send(payload *Payload) {
 		for attempt := 0; attempt < maxRetries; attempt++ {
 			if attempt > 0 {
 				// Exponential backoff: 1s, 4s
-				backoff := time.Duration(attempt*attempt) * time.Second
-				time.Sleep(backoff)
+				time.Sleep(time.Duration(attempt*attempt) * retryUnit)
 			}
 
 			if err := l.doSend(body); err != nil {

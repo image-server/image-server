@@ -17,7 +17,7 @@ func TestItemToHash(t *testing.T) {
 	bucketName := os.Getenv("AWS_BUCKET")
 	regionName := os.Getenv("AWS_REGION")
 
-	s3.Initialize(bucketName, regionName)
+	s3.Initialize(bucketName, regionName, s3.Options{})
 
 	uploader := s3.Uploader{}
 

@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/core/signature"
+	"github.com/image-server/image-server/fetcher"
 	"github.com/image-server/image-server/fetcher/http"
 	"github.com/image-server/image-server/logger/prometheus"
 	"github.com/image-server/image-server/logger/statsd"
@@ -16,6 +18,7 @@ import (
 	"github.com/image-server/image-server/namespaces"
 	"github.com/image-server/image-server/paths"
 	"github.com/image-server/image-server/uploader"
+	"github.com/image-server/image-server/uploader/s3"
 	"github.com/spf13/cobra"
 )
 
@@ -39,6 +42,12 @@ type configT struct {
 	awsSecretKey   string
 	awsBucket      string
 	awsRegion      string
+	awsPathStyle   bool
+	awsSkipACL     bool
+	s3Reads        bool
+
+	cacheControl   string
+	cacheTagHeader string
 
 	maximumWidth   int
 	defaultQuality int
@@ -104,6 +113,16 @@ func serverConfiguration() (*core.ServerConfiguration, error) {
 	}
 	sc.Adapters = adapters
 	sc.CleanUpTicker = time.NewTicker(2 * time.Minute)
+
+	if sc.S3Reads {
+		if !sc.UploaderIsAws() {
+			log.Fatal("--s3_reads requires the S3 uploader (--uploader s3)")
+		}
+		fetcher.Store = &s3.Uploader{}
+	}
+	if sc.CacheTagHeader != "" && !headerName.MatchString(sc.CacheTagHeader) {
+		log.Fatalf("Invalid --cache_tag_header %q", sc.CacheTagHeader)
+	}
 
 	// Enable webhooks if configured
 	if config.webhookURL != "" {
@@ -196,10 +215,16 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 		MaxFileAge:   maxFileAge,
 
 		// AWS specific
-		AWSAccessKeyID: config.awsAccessKeyID,
-		AWSSecretKey:   config.awsSecretKey,
-		AWSBucket:      config.awsBucket,
-		AWSRegion:      config.awsRegion,
+		AWSAccessKeyID:  config.awsAccessKeyID,
+		AWSSecretKey:    config.awsSecretKey,
+		AWSBucket:       config.awsBucket,
+		AWSRegion:       config.awsRegion,
+		AWSUsePathStyle: config.awsPathStyle,
+		AWSSkipACL:      config.awsSkipACL,
+		S3Reads:         config.s3Reads,
+
+		CacheControl:   config.cacheControl,
+		CacheTagHeader: config.cacheTagHeader,
 
 		Outputs:              config.outputs,
 		DefaultQuality:       uint(config.defaultQuality),
@@ -252,6 +277,9 @@ func namespaceAdminConfiguration(uploader string) *core.NamespaceAdminConfigurat
 	log.Printf("Namespace admin enabled (delete pattern: %q, secrets count: %d)", config.deleteNamespacePattern, len(secrets))
 	return ac
 }
+
+// headerName is an HTTP header field name (a token)
+var headerName = regexp.MustCompile(`^[A-Za-z0-9!#$%&'*+.^_|~-]+$`)
 
 // initializeUploader creates base path on destination server
 func initializeUploader(sc *core.ServerConfiguration) {

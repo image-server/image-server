@@ -58,7 +58,7 @@ func (u *Uploader) CreateDirectory(path string) error {
 
 func Initialize(sc *core.ServerConfiguration) error {
 	if sc.UploaderIsAws() {
-		s3.Initialize(sc.AWSBucket, sc.AWSRegion)
+		s3.Initialize(sc.AWSBucket, sc.AWSRegion, s3.Options{UsePathStyle: sc.AWSUsePathStyle, SkipACL: sc.AWSSkipACL})
 	}
 	return nil
 }

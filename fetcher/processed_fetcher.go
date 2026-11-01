@@ -21,8 +21,9 @@ func NewProcessedFetcher(paths core.Paths) *ProcessedFetcher {
 func (f *ProcessedFetcher) Fetch(ic *core.ImageConfiguration) (err error) {
 	destination := f.Paths.LocalImagePath(ic.Namespace, ic.ID, ic.Filename)
 	source := f.Paths.RemoteImageURL(ic.Namespace, ic.ID, ic.Filename)
+	key := f.Paths.RemoteImagePath(ic.Namespace, ic.ID, ic.Filename)
 
-	uf := NewUniqueFetcher(source, destination)
+	uf := NewRemoteFetcher(source, key, destination)
 	_, err = uf.Fetch()
 
 	if err != nil {

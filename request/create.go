@@ -45,10 +45,11 @@ func (r *Request) Create() (*info.ImageProperties, error) {
 
 func (r *Request) DownloadOriginal() error {
 	localOriginalPath := r.Paths.LocalOriginalPath(r.Namespace, r.Hash)
-	remoteOriginalPath := r.Paths.RemoteOriginalURL(r.Namespace, r.Hash)
+	remoteOriginalURL := r.Paths.RemoteOriginalURL(r.Namespace, r.Hash)
+	remoteOriginalKey := r.Paths.RemoteOriginalPath(r.Namespace, r.Hash)
 
 	// download original image
-	f := fetcher.NewUniqueFetcher(remoteOriginalPath, localOriginalPath)
+	f := fetcher.NewRemoteFetcher(remoteOriginalURL, remoteOriginalKey, localOriginalPath)
 	_, err := f.Fetch()
 	return err
 }

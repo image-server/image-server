@@ -24,6 +24,23 @@ dev-server-s3:
 test:
 	go test $(TEST) $(TESTARGS) -timeout=30s -parallel=4
 
+# Runs the suite, including the S3 integration tests, against a throwaway
+# S3-compatible store (RustFS) in Docker. CHECKSUMS=when_required tests the
+# store with the SDK's newer default checksums turned off.
+S3_TEST_IMAGE ?= rustfs/rustfs:1.0.3
+test-s3:
+	@docker rm -f image-server-test-s3 >/dev/null 2>&1 || true
+	@docker run -d --name image-server-test-s3 -p 127.0.0.1::9000 \
+		-e RUSTFS_ACCESS_KEY=test-access-key -e RUSTFS_SECRET_KEY=test-secret-key $(S3_TEST_IMAGE) >/dev/null
+	@port=$$(docker port image-server-test-s3 9000/tcp | head -1 | cut -d: -f2); \
+	for i in $$(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:$$port/ && break; sleep 0.5; done; \
+	S3_INTEGRATION=1 AWS_ENDPOINT_URL_S3=http://127.0.0.1:$$port \
+	AWS_ACCESS_KEY_ID=test-access-key AWS_SECRET_ACCESS_KEY=test-secret-key AWS_REGION=us-east-1 \
+	AWS_CONFIG_FILE=/dev/null AWS_SHARED_CREDENTIALS_FILE=/dev/null \
+	$(if $(filter when_required,$(CHECKSUMS)),AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required) \
+	go test -race -count=1 $(TEST); status=$$?; \
+	docker rm -f image-server-test-s3 >/dev/null; exit $$status
+
 version:
 	@echo $(VERSION)
 

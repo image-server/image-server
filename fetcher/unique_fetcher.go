@@ -15,10 +15,31 @@ var ErrNoRemoteStore = errors.New("not found locally and no remote store configu
 type UniqueFetcher struct {
 	Source      string
 	Destination string
+	// key is set when the file is read from Store instead of Source
+	key string
 }
 
+// RemoteStore reads files from remote storage with credentials
+type RemoteStore interface {
+	Download(key string, destination string) error
+}
+
+// Store, when set, is where files missing locally are read from, by key.
+// Otherwise they are downloaded over HTTP from the remote base URL.
+var Store RemoteStore
+
 func NewUniqueFetcher(source string, destination string) *UniqueFetcher {
-	return &UniqueFetcher{source, destination}
+	return &UniqueFetcher{Source: source, Destination: destination}
+}
+
+// NewRemoteFetcher fetches a stored file: by key from Store when one is set,
+// otherwise from url
+func NewRemoteFetcher(url string, key string, destination string) *UniqueFetcher {
+	if Store != nil {
+		// The prefix keeps the dedupe key apart from source URLs
+		return &UniqueFetcher{Source: "store:" + key, Destination: destination, key: key}
+	}
+	return NewUniqueFetcher(url, destination)
 }
 
 // Fetch returns a boolean to denote if the image was downloaded.
@@ -65,8 +86,12 @@ func (f *UniqueFetcher) uniqueFetch(c chan FetchResult) {
 			dir := filepath.Dir(destination)
 			os.MkdirAll(dir, 0700)
 
-			fetcher := &httpFetcher.Fetcher{}
-			err = fetcher.Fetch(url, destination)
+			if f.key != "" {
+				err = Store.Download(f.key, destination)
+			} else {
+				fetcher := &httpFetcher.Fetcher{}
+				err = fetcher.Fetch(url, destination)
+			}
 		}
 
 		mu.Lock()

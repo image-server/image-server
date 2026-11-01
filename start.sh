@@ -12,5 +12,14 @@ if [ "$UPLOADER" = "aws" ]; then
 fi
 
 mkdir -p /opt/image-server/public
+
+# Values with spaces can't go through CUSTOM_FLAGS, which is word-split
+set --
+if [ -n "${CACHE_CONTROL:-}" ]; then
+  set -- "$@" --cache_control "${CACHE_CONTROL}"
+fi
+if [ -n "${CACHE_TAG_HEADER:-}" ]; then
+  set -- "$@" --cache_tag_header "${CACHE_TAG_HEADER}"
+fi
 # Values quoted so an empty one cannot swallow the next flag; CUSTOM_FLAGS is word-split on purpose.
-exec bin/image-server server --local_base_path "${LOCAL_BASE_PATH}" --uploader "${UPLOADER}" --aws_bucket "${AWS_S3_BUCKET}" --aws_region "${AWS_REGION}" --listen "${SERVER_LISTEN}" --remote_base_url "${REMOTE_BASE_URL:-}" --extensions "${ALLOWED_EXTENSIONS}" ${CUSTOM_FLAGS}
+exec bin/image-server server --local_base_path "${LOCAL_BASE_PATH}" --uploader "${UPLOADER}" --aws_bucket "${AWS_S3_BUCKET}" --aws_region "${AWS_REGION}" --listen "${SERVER_LISTEN}" --remote_base_url "${REMOTE_BASE_URL:-}" --extensions "${ALLOWED_EXTENSIONS}" "$@" ${CUSTOM_FLAGS}

@@ -25,9 +25,18 @@ type ServerConfiguration struct {
 	AWSSecretKey         string
 	AWSBucket            string
 	AWSRegion            string
-	UploaderType         string
-	CleanUpTicker        *time.Ticker
-	MaxFileAge           time.Duration
+	AWSUsePathStyle      bool
+	AWSSkipACL           bool
+	// S3Reads reads files missing locally from the bucket with the S3
+	// credentials, instead of over HTTP from RemoteBaseURL
+	S3Reads bool
+	// CacheControl and CacheTagHeader are set on successful image reads
+	// when not empty; the cache tag value is the namespace
+	CacheControl   string
+	CacheTagHeader string
+	UploaderType   string
+	CleanUpTicker  *time.Ticker
+	MaxFileAge     time.Duration
 
 	// Signature validation
 	SignatureConfig *signature.Config

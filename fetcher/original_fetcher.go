@@ -39,7 +39,8 @@ func (f OriginalFetcher) Fetch(namespace string, sourceURL string, imageHash str
 func (f OriginalFetcher) fetchFromStore(namespace string, imageHash string) (details *info.ImageProperties, err error) {
 	destination := f.Paths.LocalOriginalPath(namespace, imageHash)
 	source := f.Paths.RemoteOriginalURL(namespace, imageHash)
-	uf := NewUniqueFetcher(source, destination)
+	key := f.Paths.RemoteOriginalPath(namespace, imageHash)
+	uf := NewRemoteFetcher(source, key, destination)
 	_, err = uf.Fetch()
 
 	if err != nil {
