@@ -470,6 +470,25 @@ A separate admin server runs on port 7002 with health and metrics endpoints:
 ./image-server cli /path/to/images --outputs "x300.jpg,x300.webp"
 ```
 
+### Copy local images to S3
+
+`migrate` copies a local image tree to the bucket, with the same keys and content types the server uses, so a server using local storage can move to S3:
+
+```bash
+AWS_ENDPOINT_URL_S3=... AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=... \
+./image-server migrate \
+  --local_base_path public \
+  --aws_bucket images \
+  --aws_use_path_style --aws_skip_acl \
+  --dry_run
+```
+
+- Copies `original` (with the content type from `info.json`) and `info.json`. With `--variants`, rendered variants too; otherwise they are generated again when requested.
+- Files already in the bucket are skipped, so it can be run again, e.g. after a failure or once more just before switching.
+- `tmp/` and anything outside the `{namespace}/{h0-3}/{h3-6}/{h6-9}/{h9-32}/` layout is ignored.
+- `--dry_run` lists what would be uploaded. `--namespace` limits the copy to one namespace, `--remote_base_path` sets the base path in the bucket, `--workers` (default 8) how many images are copied at once.
+- It prints one line per file and a summary, and exits with an error if any upload failed.
+
 ### Generate signing secret
 
 ```bash
