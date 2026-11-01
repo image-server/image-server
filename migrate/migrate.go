@@ -165,7 +165,6 @@ func migrateImage(opts Options, store Store, rel string, logf func(string, ...in
 		existing[n] = true
 	}
 
-	originalType := ""
 	for _, e := range entries {
 		name := e.Name()
 		if e.IsDir() || strings.HasPrefix(name, ".") {
@@ -175,10 +174,11 @@ func migrateImage(opts Options, store Store, rel string, logf func(string, ...in
 		contentType := ""
 		switch {
 		case name == "original":
-			if originalType == "" {
-				originalType = originalContentType(localDir)
+			if existing[name] {
+				s.Existing++
+				continue
 			}
-			contentType = originalType
+			contentType = originalContentType(localDir)
 		case name == "info.json":
 			contentType = "application/json"
 		case !opts.Variants:

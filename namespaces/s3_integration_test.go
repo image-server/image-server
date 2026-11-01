@@ -2,6 +2,7 @@ package namespaces
 
 import (
 	"errors"
+	"sync"
 	"testing"
 
 	. "github.com/image-server/image-server/test"
@@ -12,14 +13,18 @@ import (
 // that gives out part way through a rename
 type failingCopies struct {
 	*s3.Uploader
-	n int
+	mu sync.Mutex
+	n  int
 }
 
 func (f *failingCopies) Copy(src, dst string) error {
+	f.mu.Lock()
 	if f.n == 0 {
+		f.mu.Unlock()
 		return errStore
 	}
 	f.n--
+	f.mu.Unlock()
 	return f.Uploader.Copy(src, dst)
 }
 

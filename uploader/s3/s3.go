@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -166,8 +167,12 @@ func initialize(bucketName string, cfg aws.Config, optFns ...func(*s3.Options)) 
 	bucket = bucketName
 }
 
-// deleteBatch is the most keys one DeleteObjects request may delete
-var deleteBatch = 1000
+// deleteBatch is the most keys one DeleteObjects request may delete, and
+// deleteWorkers how many requests run at once
+var (
+	deleteBatch   = 1000
+	deleteWorkers = 8
+)
 
 // ListKeys returns every key under prefix
 func (u *Uploader) ListKeys(prefix string) ([]string, error) {
@@ -212,36 +217,85 @@ func (u *Uploader) Copy(src string, dst string) error {
 	return err
 }
 
-// DeleteKeys deletes keys, in batches of deleteBatch. Keys that do not
-// exist are not an error.
+// DeleteKeys deletes keys in batches of at most deleteBatch, sent
+// deleteWorkers at a time. Keys are split into at least deleteWorkers
+// batches, since stores may delete the keys of one batch one by one. Keys
+// that do not exist are not an error.
 func (u *Uploader) DeleteKeys(keys []string) error {
-	for start := 0; start < len(keys); start += deleteBatch {
-		end := start + deleteBatch
+	size := (len(keys) + deleteWorkers - 1) / deleteWorkers
+	if size > deleteBatch {
+		size = deleteBatch
+	}
+	if size < 1 {
+		size = 1
+	}
+	var batches [][]string
+	for start := 0; start < len(keys); start += size {
+		end := start + size
 		if end > len(keys) {
 			end = len(keys)
 		}
-		objects := make([]types.ObjectIdentifier, 0, end-start)
-		for _, key := range keys[start:end] {
-			objects = append(objects, types.ObjectIdentifier{Key: aws.String(key)})
-		}
+		batches = append(batches, keys[start:end])
+	}
+	return parallel(len(batches), deleteWorkers, func(i int) error { return deleteBatchOf(batches[i]) })
+}
 
-		ctx, cancel := context.WithTimeout(context.Background(), uploadTimeout)
-		out, err := svc.DeleteObjects(ctx, &s3.DeleteObjectsInput{
-			Bucket: aws.String(bucket),
-			Delete: &types.Delete{Objects: objects, Quiet: aws.Bool(true)},
-		})
-		cancel()
-		if err != nil {
-			return err
+func deleteBatchOf(keys []string) error {
+	objects := make([]types.ObjectIdentifier, 0, len(keys))
+	for _, key := range keys {
+		objects = append(objects, types.ObjectIdentifier{Key: aws.String(key)})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), uploadTimeout)
+	defer cancel()
+	out, err := svc.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+		Bucket: aws.String(bucket),
+		Delete: &types.Delete{Objects: objects, Quiet: aws.Bool(true)},
+	})
+	if err != nil {
+		return err
+	}
+	for _, e := range out.Errors {
+		if aws.ToString(e.Code) == "NoSuchKey" {
+			continue
 		}
-		for _, e := range out.Errors {
-			if aws.ToString(e.Code) == "NoSuchKey" {
-				continue
-			}
-			return fmt.Errorf("delete %s: %s: %s", aws.ToString(e.Key), aws.ToString(e.Code), aws.ToString(e.Message))
-		}
+		return fmt.Errorf("delete %s: %s: %s", aws.ToString(e.Key), aws.ToString(e.Code), aws.ToString(e.Message))
 	}
 	return nil
+}
+
+// parallel calls fn(0..n-1) with at most workers running at once. It stops
+// starting new calls after the first error, and returns it.
+func parallel(n, workers int, fn func(i int) error) error {
+	var mu sync.Mutex
+	var firstErr error
+	next := 0
+	var wg sync.WaitGroup
+	for w := 0; w < workers && w < n; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				mu.Lock()
+				if firstErr != nil || next >= n {
+					mu.Unlock()
+					return
+				}
+				i := next
+				next++
+				mu.Unlock()
+				if err := fn(i); err != nil {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = err
+					}
+					mu.Unlock()
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	return firstErr
 }
 
 // PutBytes stores a small object
