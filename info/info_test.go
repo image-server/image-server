@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/davidbyttow/govips/v2/vips"
@@ -191,6 +192,9 @@ func TestImageDetailsReportsDisplayedSizeForRotatedPNGAndWebP(t *testing.T) {
 func TestDetailsFromImageMagickReportsDisplayedSize(t *testing.T) {
 	if _, err := exec.LookPath("identify"); err != nil {
 		t.Skip("ImageMagick not available")
+	}
+	if out, _ := exec.Command("identify", "-version").Output(); strings.Contains(string(out), "ImageMagick 6.") {
+		t.Skip("ImageMagick 6 does not read the EXIF orientation of PNG files")
 	}
 	details, err := info.Info{Path: writeOriented(t, "png", 6)}.DetailsFromImageMagick()
 	Ok(t, err)
