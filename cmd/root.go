@@ -201,7 +201,7 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 			sigConfig.RequireForReads, sigConfig.MaxTTL, len(sigConfig.Secrets))
 	}
 
-	namespaceAdmin := namespaceAdminConfiguration(uploader)
+	namespaceAdmin := namespaceAdminConfiguration()
 
 	return &core.ServerConfiguration{
 		AllowedExtensions: allowedExtensions,
@@ -240,8 +240,8 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 }
 
 // namespaceAdminConfiguration returns nil unless --allow-namespace-admin is
-// set. It refuses to start without admin secrets, or with remote storage.
-func namespaceAdminConfiguration(uploader string) *core.NamespaceAdminConfiguration {
+// set. It refuses to start without admin secrets.
+func namespaceAdminConfiguration() *core.NamespaceAdminConfiguration {
 	if !config.allowNamespaceAdmin {
 		return nil
 	}
@@ -256,9 +256,6 @@ func namespaceAdminConfiguration(uploader string) *core.NamespaceAdminConfigurat
 	}
 	if len(secrets) == 0 {
 		log.Fatal("--allow-namespace-admin requires secrets. Use --admin-signing-secrets-file")
-	}
-	if uploader != "noop" {
-		log.Fatal("--allow-namespace-admin requires local storage (--uploader noop)")
 	}
 
 	maxTTL := time.Duration(config.signatureMaxTTL) * time.Minute
