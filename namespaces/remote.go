@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 
 	vipsadapter "github.com/image-server/image-server/processor/vips"
 )
@@ -32,6 +33,9 @@ type Storage struct {
 // progress. It tells a retry of the same rename that the target is a partial
 // copy to finish, not a namespace that was already there.
 const renameMarker = ".rename.json"
+
+// CopyWorkers is how many objects a remote rename copies at once
+var CopyWorkers = 16
 
 type marker struct {
 	From string `json:"from"`
@@ -94,14 +98,24 @@ func (s Storage) renameRemote(from, to, fromDir, toDir string) (string, error) {
 		}
 	}
 
+	var pending []string
 	for _, key := range fromKeys {
 		rel := strings.TrimPrefix(key, fromPrefix)
-		if rel == renameMarker || copied[rel] {
-			continue
+		if rel != renameMarker && !copied[rel] {
+			pending = append(pending, rel)
 		}
-		if err := s.Remote.Copy(key, toPrefix+rel); err != nil {
-			return "", fmt.Errorf("copy %s: %w", key, err)
+	}
+	// Copies are independent, and a store takes about as long for one as
+	// for several at once
+	err = parallel(len(pending), CopyWorkers, func(i int) error {
+		rel := pending[i]
+		if err := s.Remote.Copy(fromPrefix+rel, toPrefix+rel); err != nil {
+			return fmt.Errorf("copy %s: %w", fromPrefix+rel, err)
 		}
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 	if err := s.Remote.DeleteKeys(fromKeys); err != nil {
 		return "", err
@@ -177,4 +191,38 @@ func hasKey(keys []string, key string) bool {
 		}
 	}
 	return false
+}
+
+// parallel calls fn(0..n-1) with at most workers running at once. It stops
+// starting new calls after the first error, and returns it.
+func parallel(n, workers int, fn func(i int) error) error {
+	var mu sync.Mutex
+	var firstErr error
+	next := 0
+	var wg sync.WaitGroup
+	for w := 0; w < workers && w < n; w++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				mu.Lock()
+				if firstErr != nil || next >= n {
+					mu.Unlock()
+					return
+				}
+				i := next
+				next++
+				mu.Unlock()
+				if err := fn(i); err != nil {
+					mu.Lock()
+					if firstErr == nil {
+						firstErr = err
+					}
+					mu.Unlock()
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	return firstErr
 }
