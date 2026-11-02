@@ -34,9 +34,14 @@ type ServerConfiguration struct {
 	// when not empty; the cache tag value is the namespace
 	CacheControl   string
 	CacheTagHeader string
-	UploaderType   string
-	CleanUpTicker  *time.Ticker
-	MaxFileAge     time.Duration
+
+	// RenameCopyWorkers and DeleteWorkers limit how many copy and delete
+	// requests a namespace rename or delete sends to S3 at once
+	RenameCopyWorkers int
+	DeleteWorkers     int
+	UploaderType      string
+	CleanUpTicker     *time.Ticker
+	MaxFileAge        time.Duration
 
 	// Signature validation
 	SignatureConfig *signature.Config

@@ -211,3 +211,35 @@ func TestDownloadLeavesNoPartialFile(t *testing.T) {
 	entries, _ := os.ReadDir(dir)
 	Equals(t, 0, len(entries))
 }
+
+// DeleteWorkers limits how many delete requests run at once
+func TestDeleteKeysRespectsWorkerLimit(t *testing.T) {
+	var running, peak int32
+	useFakeS3(t, func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&running, 1)
+		for {
+			p := atomic.LoadInt32(&peak)
+			if n <= p || atomic.CompareAndSwapInt32(&peak, p, n) {
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+		atomic.AddInt32(&running, -1)
+		io.Copy(io.Discard, r.Body)
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, `<DeleteResult></DeleteResult>`)
+	})
+	old := deleteWorkers
+	t.Cleanup(func() { deleteWorkers = old })
+
+	keys := make([]string, 40)
+	for i := range keys {
+		keys[i] = fmt.Sprintf("ns/k%d", i)
+	}
+	for _, workers := range []int{1, 3} {
+		deleteWorkers = workers
+		atomic.StoreInt32(&peak, 0)
+		Ok(t, (&Uploader{}).DeleteKeys(keys))
+		Equals(t, int32(workers), atomic.LoadInt32(&peak))
+	}
+}

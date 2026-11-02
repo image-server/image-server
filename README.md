@@ -251,6 +251,8 @@ With local storage the rename is a single atomic directory rename. S3 has no ren
 
 Requests to either namespace wait until the rename is done.
 
+In S3, rename copies `--rename_copy_workers` objects at once (default 16), and rename and delete send `--delete_workers` delete requests of up to 1,000 keys at once (default 8). Lower them to reduce the load on the store, at the cost of slower renames and deletes.
+
 **Delete** removes a namespace with every image in it, permanently. Only namespaces whose whole name matches `--delete-namespace-pattern` can be deleted; without a pattern, delete returns `404`.
 
 ```

@@ -73,6 +73,9 @@ func init() {
 	serverCmd.Flags().BoolVar(&config.awsSkipACL, "aws_skip_acl", false, "Upload without the public-read ACL, for private buckets and stores that reject ACLs")
 	serverCmd.Flags().BoolVar(&config.s3Reads, "s3_reads", false, "Read files missing locally from the bucket with the S3 credentials, instead of over HTTP from --remote_base_url")
 
+	serverCmd.Flags().IntVar(&config.renameCopyWorkers, "rename_copy_workers", 16, "Objects a namespace rename copies at once in S3")
+	serverCmd.Flags().IntVar(&config.deleteWorkers, "delete_workers", 8, "Delete requests (of up to 1,000 keys) a namespace rename or delete sends to S3 at once")
+
 	// Caching
 	serverCmd.Flags().StringVar(&config.cacheControl, "cache_control", "", "Cache-Control header for successful image reads, e.g. 'public, max-age=31536000, immutable' (empty: none)")
 	serverCmd.Flags().StringVar(&config.cacheTagHeader, "cache_tag_header", "", "Header that carries the namespace on successful image reads, e.g. Cache-Tag (empty: none)")

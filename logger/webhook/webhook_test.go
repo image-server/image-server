@@ -153,6 +153,9 @@ func TestWebhookDelivery(t *testing.T) {
 	var receivedHeaders http.Header
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isWebhook(r) {
+			return
+		}
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -212,6 +215,9 @@ func TestWebhookEventFiltering(t *testing.T) {
 	requestCount := 0
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isWebhook(r) {
+			return
+		}
 		mu.Lock()
 		requestCount++
 		mu.Unlock()
@@ -256,6 +262,9 @@ func TestWebhookRetry(t *testing.T) {
 	requestCount := 0
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isWebhook(r) {
+			return
+		}
 		mu.Lock()
 		requestCount++
 		count := requestCount
@@ -310,6 +319,9 @@ func TestWebhookNoSecret(t *testing.T) {
 	received := make(chan http.Header, 1)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isWebhook(r) {
+			return
+		}
 		received <- r.Header.Clone()
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -338,4 +350,10 @@ func TestWebhookNoSecret(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("webhook was not received")
 	}
+}
+
+// isWebhook is false for stray requests to the test server, such as other
+// local processes probing ports, so they are not counted as webhooks
+func isWebhook(r *http.Request) bool {
+	return r.Method == http.MethodPost && r.UserAgent() == userAgent
 }
