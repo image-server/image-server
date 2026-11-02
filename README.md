@@ -239,11 +239,17 @@ POST /{namespace}/rename/{to}
 200 {"from": "products", "to": "archived_products", "status": "renamed"}
 ```
 
-- `200` with `"status": "missing"` when `{namespace}` does not exist, so a retry after a rename that succeeded is safe
+- `200` with `"status": "missing"` when `{namespace}` does not exist, so a retry after a rename that succeeded is safe (with S3, such a retry returns `renamed`; see below)
 - `409` with `"status": "conflict"` when `{to}` already exists; the target is never overwritten
 - `400` when `{to}` is not a valid namespace name, is the same as `{namespace}`, or is reserved (`tmp`)
 
-With local storage the rename is a single atomic directory rename. S3 has no rename, so the server copies every object to the new name, then deletes the old ones; this takes longer for large namespaces. While it runs, a `{to}/.rename.json` marker names the source. If the rename stops part way (an error or a restart), retrying the same rename finishes it and returns `renamed`, without copying again what was already copied; the partial target is not taken for an existing namespace. Requests to either namespace wait until the rename is done.
+With local storage the rename is a single atomic directory rename. S3 has no rename, so the server copies every object to the new name, then deletes the old ones; this takes longer for large namespaces. A `{to}/.rename.json` marker names the source, the state (`running`, then `done`) and, once done, the number of objects moved:
+
+- If the rename stops part way (an error or a restart), retrying the same rename finishes it and returns `renamed`, without copying again what was already copied. The partial target is not taken for an existing namespace.
+- Retrying the same rename after it completed returns `renamed`, as long as the source is still empty and the target holds at least the objects it recorded. If objects have gone from the target since, it returns `409`.
+- Any other rename ignores the marker: a target with content is `409`, and nothing anywhere is `missing`. Renaming the target again (e.g. back to its old name) moves the marker away with the rest of its objects, and deleting the namespace removes it.
+
+Requests to either namespace wait until the rename is done.
 
 **Delete** removes a namespace with every image in it, permanently. Only namespaces whose whole name matches `--delete-namespace-pattern` can be deleted; without a pattern, delete returns `404`.
 

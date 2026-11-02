@@ -37,6 +37,15 @@ func TestS3RenameAndDelete(t *testing.T) {
 	}
 	store.Put(t, "images/acct2/"+img1+"/original", []byte("x"), "image/jpeg")
 	s := Storage{Root: t.TempDir(), Remote: &failingCopies{Uploader: u, n: 2}, RemoteBase: "images"}
+	objects := func(ns string) int {
+		n := 0
+		for _, k := range store.Keys(t, "images/"+ns+"/") {
+			if k != "images/"+ns+"/"+renameMarker {
+				n++
+			}
+		}
+		return n
+	}
 
 	// The first attempt stops after two copies; a retry finishes it
 	if _, err := s.Rename("acct", "hidden_1"); !errors.Is(err, errStore) {
@@ -47,22 +56,43 @@ func TestS3RenameAndDelete(t *testing.T) {
 	Ok(t, err)
 	Equals(t, "renamed", status)
 	Equals(t, 0, len(store.Keys(t, "images/acct/")))
-	Equals(t, 4, len(store.Keys(t, "images/hidden_1/")))
-	Equals(t, 1, len(store.Keys(t, "images/acct2/")))
+	Equals(t, 4, objects("hidden_1"))
+	Equals(t, 1, objects("acct2"))
+	Assert(t, store.Head(t, "images/hidden_1/"+renameMarker) != nil, "no done marker")
+
+	// A retry after completion answers renamed
+	status, err = s.Rename("acct", "hidden_1")
+	Ok(t, err)
+	Equals(t, "renamed", status)
 
 	// Both exist: refused, nothing changes
 	_, err = s.Rename("acct2", "hidden_1")
 	Assert(t, errors.Is(err, ErrExists), "got %v, want ErrExists", err)
+	Equals(t, 4, objects("hidden_1"))
 
-	// Restore, then delete
-	status, err = s.Rename("hidden_1", "acct")
+	// Restore and hide again with the same names: real renames each time
+	for _, step := range [][2]string{{"hidden_1", "acct"}, {"acct", "hidden_1"}} {
+		status, err = s.Rename(step[0], step[1])
+		Ok(t, err)
+		Equals(t, "renamed", status)
+		Equals(t, 0, len(store.Keys(t, "images/"+step[0]+"/")))
+		Equals(t, 4, objects(step[1]))
+	}
+
+	// A done marker whose target lost objects is not taken as done
+	Ok(t, u.DeleteKeys([]string{"images/hidden_1/" + img2 + "/info.json"}))
+	_, err = s.Rename("acct", "hidden_1")
+	Assert(t, errors.Is(err, ErrExists), "got %v, want ErrExists for a smaller target", err)
+
+	// Delete removes the objects and the marker
+	result, err := s.Delete("hidden_1")
 	Ok(t, err)
-	Equals(t, "renamed", status)
-	result, err := s.Delete("acct")
-	Ok(t, err)
-	Equals(t, Result{Status: "deleted", Images: 2, Files: 4}, result)
-	Equals(t, 0, len(store.Keys(t, "images/acct/")))
-	result, err = s.Delete("acct")
+	Equals(t, Result{Status: "deleted", Images: 2, Files: 3}, result)
+	Equals(t, 0, len(store.Keys(t, "images/hidden_1/")))
+	result, err = s.Delete("hidden_1")
 	Ok(t, err)
 	Equals(t, "missing", result.Status)
+	status, err = s.Rename("acct", "hidden_1")
+	Ok(t, err)
+	Equals(t, "missing", status)
 }
