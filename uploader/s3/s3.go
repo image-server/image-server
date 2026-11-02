@@ -34,6 +34,9 @@ type Options struct {
 	// SkipACL leaves out the public-read ACL on uploads, for private buckets
 	// and stores that reject ACLs
 	SkipACL bool
+	// DeleteWorkers is how many delete requests run at once; 0 keeps the
+	// default
+	DeleteWorkers int
 }
 
 // ErrNotFound is returned by Download when the key does not exist
@@ -153,6 +156,9 @@ func Initialize(bucketName string, regionName string, opts Options) {
 		log.Fatalf("AWS S3 configuration failed: %v", err)
 	}
 	skipACL = opts.SkipACL
+	if opts.DeleteWorkers > 0 {
+		deleteWorkers = opts.DeleteWorkers
+	}
 	initialize(bucketName, cfg, func(o *s3.Options) {
 		o.UsePathStyle = opts.UsePathStyle
 	})

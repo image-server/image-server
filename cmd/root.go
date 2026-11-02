@@ -49,6 +49,9 @@ type configT struct {
 	cacheControl   string
 	cacheTagHeader string
 
+	renameCopyWorkers int
+	deleteWorkers     int
+
 	maximumWidth   int
 	defaultQuality int
 
@@ -119,6 +122,16 @@ func serverConfiguration() (*core.ServerConfiguration, error) {
 			log.Fatal("--s3_reads requires the S3 uploader (--uploader s3)")
 		}
 		fetcher.Store = &s3.Uploader{}
+	}
+	// 0 keeps the defaults, e.g. for commands without these flags
+	if sc.RenameCopyWorkers < 0 || sc.DeleteWorkers < 0 {
+		log.Fatal("--rename_copy_workers and --delete_workers must be at least 1 (0 keeps the default)")
+	}
+	if sc.RenameCopyWorkers > 0 {
+		namespaces.CopyWorkers = sc.RenameCopyWorkers
+	}
+	if sc.UploaderIsAws() && config.allowNamespaceAdmin {
+		log.Printf("Namespace admin in S3: %d copies, %d delete requests at once", namespaces.CopyWorkers, sc.DeleteWorkers)
 	}
 	if sc.CacheTagHeader != "" && !headerName.MatchString(sc.CacheTagHeader) {
 		log.Fatalf("Invalid --cache_tag_header %q", sc.CacheTagHeader)
@@ -225,6 +238,9 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 
 		CacheControl:   config.cacheControl,
 		CacheTagHeader: config.cacheTagHeader,
+
+		RenameCopyWorkers: config.renameCopyWorkers,
+		DeleteWorkers:     config.deleteWorkers,
 
 		Outputs:              config.outputs,
 		DefaultQuality:       uint(config.defaultQuality),

@@ -3,10 +3,12 @@ package namespaces
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -384,4 +386,46 @@ func TestRemoteRenameSourceWithOnlyItsMarker(t *testing.T) {
 		t.Fatalf("got %q, %v; want missing", status, err)
 	}
 	expectKeys(t, m, "images/a/"+renameMarker)
+}
+
+// CopyWorkers limits how many copies a rename runs at once
+func TestRemoteRenameRespectsCopyWorkers(t *testing.T) {
+	var keys []string
+	for i := 0; i < 30; i++ {
+		keys = append(keys, fmt.Sprintf("images/a/%s/w%d.jpg", img1, i))
+	}
+	for _, workers := range []int{1, 4} {
+		s, m := remoteStorage(t, keys...)
+		slow := &slowCopies{memRemote: m}
+		s.Remote = slow
+		old := CopyWorkers
+		CopyWorkers = workers
+		status, err := s.Rename("a", "b")
+		CopyWorkers = old
+		if err != nil || status != "renamed" {
+			t.Fatalf("got %q, %v", status, err)
+		}
+		if p := atomic.LoadInt32(&slow.peak); p != int32(workers) {
+			t.Fatalf("%d workers: %d copies ran at once", workers, p)
+		}
+	}
+}
+
+// slowCopies records how many copies run at once
+type slowCopies struct {
+	*memRemote
+	running, peak int32
+}
+
+func (s *slowCopies) Copy(src, dst string) error {
+	n := atomic.AddInt32(&s.running, 1)
+	for {
+		p := atomic.LoadInt32(&s.peak)
+		if n <= p || atomic.CompareAndSwapInt32(&s.peak, p, n) {
+			break
+		}
+	}
+	time.Sleep(10 * time.Millisecond)
+	atomic.AddInt32(&s.running, -1)
+	return s.memRemote.Copy(src, dst)
 }
