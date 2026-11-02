@@ -429,3 +429,31 @@ func (s *slowCopies) Copy(src, dst string) error {
 	atomic.AddInt32(&s.running, -1)
 	return s.memRemote.Copy(src, dst)
 }
+
+// With S3, local directories with no files are not a namespace either
+func TestRemoteEmptyLocalDirectories(t *testing.T) {
+	s, m := remoteStorage(t, "images/a/"+img1+"/original")
+	emptyTree(t, s.Root, "b") // a request for the target name before the rename
+	if status, err := s.Rename("a", "b"); err != nil || status != "renamed" {
+		t.Fatalf("got %q, %v", status, err)
+	}
+
+	emptyTree(t, s.Root, "a") // a request for the old name after it
+	if status, err := s.Rename("a", "b"); err != nil || status != "renamed" {
+		t.Fatalf("retry after completion: got %q, %v", status, err)
+	}
+	if _, err := s.Delete("b"); err != nil {
+		t.Fatal(err)
+	}
+	emptyTree(t, s.Root, "a")
+	if status, err := s.Rename("a", "b"); err != nil || status != "missing" {
+		t.Fatalf("after delete: got %q, %v; want missing", status, err)
+	}
+	expectKeys(t, m)
+
+	emptyTree(t, s.Root, "c")
+	result, err := s.Delete("c")
+	if err != nil || result.Status != "missing" {
+		t.Fatalf("delete of empty directories: got %+v, %v", result, err)
+	}
+}
