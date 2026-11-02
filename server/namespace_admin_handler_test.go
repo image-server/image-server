@@ -16,7 +16,8 @@ import (
 
 	"github.com/image-server/image-server/core"
 	"github.com/image-server/image-server/core/signature"
-	fetcher "github.com/image-server/image-server/fetcher/http"
+	"github.com/image-server/image-server/fetcher"
+	fetcherhttp "github.com/image-server/image-server/fetcher/http"
 	"github.com/image-server/image-server/logger"
 	"github.com/image-server/image-server/namespaces"
 	"github.com/image-server/image-server/paths"
@@ -33,7 +34,7 @@ func adminServer(t *testing.T, pattern string) (http.Handler, *core.ServerConfig
 	base := t.TempDir()
 	sc := &core.ServerConfiguration{LocalBasePath: base, DefaultQuality: 90}
 	p := &paths.Paths{LocalBasePath: base}
-	sc.Adapters = &core.Adapters{Fetcher: &fetcher.Fetcher{}, Paths: p}
+	sc.Adapters = &core.Adapters{Fetcher: &fetcherhttp.Fetcher{}, Paths: p}
 	sc.NamespaceAdmin = &core.NamespaceAdminConfiguration{Secrets: []string{adminSecret}, MaxTTL: time.Hour}
 	if pattern != "" {
 		compiled, err := namespaces.CompileDeletePattern(pattern)
@@ -396,4 +397,27 @@ func TestNamespaceAdminRejectionLogIsRateLimited(t *testing.T) {
 	if n := strings.Count(logs.String(), "WARN namespace admin rejected"); n > 20 {
 		t.Fatalf("logged %d warnings in a minute, want at most 20", n)
 	}
+}
+
+// A request for an image that does not exist leaves no namespace behind
+func TestRenameAfterRequestForMissingImage(t *testing.T) {
+	router, sc := adminServer(t, "")
+	sc.UploaderType = "s3"
+	b := &bucket{objects: map[string][]byte{}}
+	t.Cleanup(server.SetNamespaceRemote(b))
+	// Reads go to the bucket and miss, as with --s3_reads
+	fetcher.Store = &fakeStore{files: map[string][]byte{}}
+	t.Cleanup(func() { fetcher.Store = nil })
+
+	Equals(t, http.StatusNotFound, serve(router, "GET", "/nothing_here/6e0/072/682/e66287b662827da75b244a3/w50.jpg").Code)
+	r := serve(router, "POST", signed("POST", "/nothing_here/rename/other", adminSecret))
+	Equals(t, http.StatusOK, r.Code)
+	Matches(t, `"status": "missing"`, r.Body.String())
+
+	// Nor a conflict for a rename into that name
+	Equals(t, http.StatusNotFound, serve(router, "GET", "/target_name/6e0/072/682/e66287b662827da75b244a3/w50.jpg").Code)
+	b.objects["test_namespace/6e0/072/682/e66287b662827da75b244a3/original"] = []byte("x")
+	r = serve(router, "POST", signed("POST", "/test_namespace/rename/target_name", adminSecret))
+	Equals(t, http.StatusOK, r.Code)
+	Matches(t, `"status": "renamed"`, r.Body.String())
 }

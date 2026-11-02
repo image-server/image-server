@@ -5,6 +5,7 @@ package namespaces
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -69,15 +70,23 @@ func (s Storage) Rename(from, to string) (string, error) {
 		return s.renameRemote(from, to, fromDir, toDir)
 	}
 
-	if _, err := os.Lstat(fromDir); os.IsNotExist(err) {
-		return "missing", nil
-	} else if err != nil {
+	fromHasFiles, err := hasFiles(fromDir)
+	if err != nil {
 		return "", err
 	}
-	// rename(2) would silently replace an empty directory
-	if _, err := os.Lstat(toDir); err == nil {
+	if !fromHasFiles {
+		return "missing", nil
+	}
+	toHasFiles, err := hasFiles(toDir)
+	if err != nil {
+		return "", err
+	}
+	if toHasFiles {
 		return "", fmt.Errorf("%w: %s", ErrExists, to)
-	} else if !os.IsNotExist(err) {
+	}
+	// Directories with no files (e.g. left by a request for an image that
+	// did not exist) hold nothing; rename(2) cannot replace them
+	if err := os.RemoveAll(toDir); err != nil {
 		return "", err
 	}
 
@@ -113,6 +122,15 @@ func (s Storage) Delete(namespace string) (Result, error) {
 	if !info.IsDir() {
 		return Result{}, fmt.Errorf("%s is not a directory", namespace)
 	}
+	if found, err := hasFiles(nsDir); err != nil {
+		return Result{}, err
+	} else if !found {
+		// Only empty directories: nothing to delete, but clear them
+		if err := os.RemoveAll(nsDir); err != nil {
+			return Result{}, err
+		}
+		return Result{Status: "missing"}, nil
+	}
 
 	images, files, err := count(nsDir)
 	if err != nil {
@@ -140,6 +158,27 @@ func dir(root, namespace string) (string, error) {
 		return "", fmt.Errorf("%w: %q is outside the storage root", ErrInvalidName, namespace)
 	}
 	return d, nil
+}
+
+// hasFiles is true when dir holds at least one file. A request for an image
+// that does not exist can leave empty directories behind; they are not a
+// namespace.
+func hasFiles(dir string) (bool, error) {
+	found := false
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			found = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return found, err
 }
 
 // count returns the images (directories four levels down, one per hash) and

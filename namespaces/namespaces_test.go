@@ -50,16 +50,51 @@ func TestRenameMovesNamespace(t *testing.T) {
 func TestRenameRefusesExistingTarget(t *testing.T) {
 	root := t.TempDir()
 	image(t, root, "a")
-	// Even an empty directory, which rename(2) would replace
-	if err := os.Mkdir(filepath.Join(root, "b"), 0700); err != nil {
-		t.Fatal(err)
-	}
+	image(t, root, "b")
 
 	if _, err := Rename(root, "a", "b"); !errors.Is(err, ErrExists) {
 		t.Fatalf("got %v, want ErrExists", err)
 	}
 	if !exists(filepath.Join(root, "a")) {
 		t.Fatal("source moved")
+	}
+}
+
+// emptyTree is what a request for an image that does not exist leaves
+func emptyTree(t *testing.T, root, namespace string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(root, namespace, "6e0", "072", "682", "e66287b662827da75b244a3"), 0700); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Directories with no files are not a namespace
+func TestEmptyDirectoriesAreNotANamespace(t *testing.T) {
+	root := t.TempDir()
+	image(t, root, "a")
+	emptyTree(t, root, "b")
+	emptyTree(t, root, "c")
+
+	// Not a conflict for a target...
+	if status, err := Rename(root, "a", "b"); err != nil || status != "renamed" {
+		t.Fatalf("rename onto empty directories: got %q, %v", status, err)
+	}
+	if !exists(filepath.Join(root, "b", "6e0", "072", "682", "e66287b662827da75b244a3", "original")) {
+		t.Fatal("namespace not moved")
+	}
+	// ...and nothing to move or delete for a source
+	if status, err := Rename(root, "c", "d"); err != nil || status != "missing" {
+		t.Fatalf("rename of empty directories: got %q, %v", status, err)
+	}
+	if exists(filepath.Join(root, "d")) {
+		t.Fatal("empty directories moved")
+	}
+	result, err := Delete(root, "c")
+	if err != nil || result.Status != "missing" {
+		t.Fatalf("delete of empty directories: got %+v, %v", result, err)
+	}
+	if exists(filepath.Join(root, "c")) {
+		t.Fatal("empty directories not cleared")
 	}
 }
 

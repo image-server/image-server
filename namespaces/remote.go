@@ -98,10 +98,16 @@ func (s Storage) renameRemote(from, to, fromDir, toDir string) (string, error) {
 			copied[strings.TrimPrefix(key, toPrefix)] = true
 		}
 	}
-	_, localFromErr := os.Lstat(fromDir)
-	_, localToErr := os.Lstat(toDir)
+	localFrom, err := hasFiles(fromDir)
+	if err != nil {
+		return "", err
+	}
+	localTo, err := hasFiles(toDir)
+	if err != nil {
+		return "", err
+	}
 
-	if sourceObjects == 0 && localFromErr != nil {
+	if sourceObjects == 0 && !localFrom {
 		switch {
 		case running:
 			// An earlier attempt moved everything but stopped before the end
@@ -124,7 +130,7 @@ func (s Storage) renameRemote(from, to, fromDir, toDir string) (string, error) {
 
 	// Anything in the target that is not this rename in progress: never
 	// overwrite it. A done marker is not resumed: the source has new content.
-	if !running && (len(copied) > 0 || localToErr == nil || m != nil) {
+	if !running && (len(copied) > 0 || localTo || m != nil) {
 		return "", fmt.Errorf("%w: %s", ErrExists, to)
 	}
 
@@ -198,8 +204,15 @@ func (s Storage) deleteRemote(namespace, nsDir string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	_, localErr := os.Lstat(nsDir)
-	if len(keys) == 0 && localErr != nil {
+	local, err := hasFiles(nsDir)
+	if err != nil {
+		return Result{}, err
+	}
+	if len(keys) == 0 && !local {
+		// Clear directories left with no files
+		if err := os.RemoveAll(nsDir); err != nil {
+			return Result{}, err
+		}
 		return Result{Status: "missing"}, nil
 	}
 
