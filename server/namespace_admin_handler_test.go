@@ -88,7 +88,9 @@ func TestRenameNamespace(t *testing.T) {
 
 func TestRenameNamespaceCollision(t *testing.T) {
 	router, sc := adminServer(t, "")
-	Ok(t, os.Mkdir(filepath.Join(sc.LocalBasePath, "taken"), 0700))
+	taken := filepath.Join(sc.LocalBasePath, "taken", "6e0", "072", "682", "e66287b662827da75b244a3")
+	Ok(t, os.MkdirAll(taken, 0700))
+	Ok(t, os.WriteFile(filepath.Join(taken, "original"), []byte("x"), 0644))
 
 	r := serve(router, "POST", signed("POST", "/test_namespace/rename/taken", adminSecret))
 	Equals(t, http.StatusConflict, r.Code)
