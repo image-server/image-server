@@ -220,11 +220,17 @@ func TestNamespaceAdminWithRemoteStorage(t *testing.T) {
 	Matches(t, `"status": "renamed"`, r.Body.String())
 	keys, _ := b.ListKeys("images/")
 	Equals(t, []string{
+		"images/archive_1/.rename.json",
 		"images/archive_1/6e0/072/682/e66287b662827da75b244a3/original",
 		"images/archive_1/6e0/072/682/e66287b662827da75b244a3/w50.jpg",
 		"images/other/6e0/072/682/e66287b662827da75b244a3/original",
 	}, keys)
 	Equals(t, false, nsExists(sc, "test_namespace"))
+
+	// A retry of the same rename after it completed
+	r = serve(router, "POST", signed("POST", "/test_namespace/rename/archive_1", adminSecret))
+	Equals(t, http.StatusOK, r.Code)
+	Matches(t, `"status": "renamed"`, r.Body.String())
 
 	// Both names hold images
 	r = serve(router, "POST", signed("POST", "/other/rename/archive_1", adminSecret))

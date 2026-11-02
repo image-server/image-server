@@ -1,6 +1,7 @@
 package namespaces
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -29,6 +30,17 @@ func expectKeys(t *testing.T, m *memRemote, want ...string) {
 	}
 }
 
+func expectMarker(t *testing.T, m *memRemote, key string, want marker) {
+	t.Helper()
+	var got marker
+	if err := json.Unmarshal([]byte(m.objects[key]), &got); err != nil {
+		t.Fatalf("marker %s: %v (%q)", key, err, m.objects[key])
+	}
+	if got != want {
+		t.Fatalf("marker %s: got %+v, want %+v", key, got, want)
+	}
+}
+
 func TestRemoteRenameMovesEveryObject(t *testing.T) {
 	s, m := remoteStorage(t,
 		"images/a/"+img1+"/original", "images/a/"+img1+"/w100.jpg", "images/a/"+img2+"/original",
@@ -40,8 +52,9 @@ func TestRemoteRenameMovesEveryObject(t *testing.T) {
 	if err != nil || status != "renamed" {
 		t.Fatalf("got %q, %v", status, err)
 	}
-	expectKeys(t, m, "images/ab/"+img1+"/original",
+	expectKeys(t, m, "images/ab/"+img1+"/original", "images/b/"+renameMarker,
 		"images/b/"+img1+"/original", "images/b/"+img1+"/w100.jpg", "images/b/"+img2+"/original")
+	expectMarker(t, m, "images/b/"+renameMarker, marker{From: "a", Status: markerDone, Count: 3})
 	if exists(filepath.Join(s.Root, "a")) {
 		t.Fatal("local cache of the source not removed")
 	}
@@ -49,9 +62,9 @@ func TestRemoteRenameMovesEveryObject(t *testing.T) {
 		t.Fatal("content not copied")
 	}
 
-	// A retry after success: nothing to move
+	// A retry after success answers from the done marker
 	status, err = s.Rename("a", "b")
-	if err != nil || status != "missing" {
+	if err != nil || status != "renamed" {
 		t.Fatalf("retry got %q, %v", status, err)
 	}
 }
@@ -106,7 +119,8 @@ func TestRemoteRenameResumesAfterPartialCopy(t *testing.T) {
 	if n := m.copies - copiesBefore; n != 2 {
 		t.Fatalf("retry copied %d objects, want only the 2 not yet copied", n)
 	}
-	expectKeys(t, m, "images/b/"+img1+"/original", "images/b/"+img1+"/w100.jpg", "images/b/"+img2+"/original")
+	expectKeys(t, m, "images/b/"+renameMarker, "images/b/"+img1+"/original", "images/b/"+img1+"/w100.jpg", "images/b/"+img2+"/original")
+	expectMarker(t, m, "images/b/"+renameMarker, marker{From: "a", Status: markerDone, Count: 3})
 }
 
 // Everything moved, but the marker was not removed: a retry removes it
@@ -118,7 +132,8 @@ func TestRemoteRenameFinishesAfterFailedCleanup(t *testing.T) {
 	if err != nil || status != "renamed" {
 		t.Fatalf("got %q, %v", status, err)
 	}
-	expectKeys(t, m, "images/b/"+img1+"/original")
+	expectKeys(t, m, "images/b/"+renameMarker, "images/b/"+img1+"/original")
+	expectMarker(t, m, "images/b/"+renameMarker, marker{From: "a", Status: markerDone, Count: 1})
 }
 
 // Another rename's marker does not let this one write into the target
@@ -139,7 +154,8 @@ func TestRemoteRenameBackAndForth(t *testing.T) {
 			t.Fatalf("%v: got %q, %v", step, status, err)
 		}
 	}
-	expectKeys(t, m, "images/hidden_2/"+img1+"/original")
+	expectKeys(t, m, "images/hidden_2/"+renameMarker, "images/hidden_2/"+img1+"/original")
+	expectMarker(t, m, "images/hidden_2/"+renameMarker, marker{From: "a", Status: markerDone, Count: 1})
 }
 
 // A background upload into the source, started by a request that held the
@@ -167,7 +183,7 @@ func TestRemoteRenameWaitsForBackgroundUploads(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	expectKeys(t, m, "images/b/"+img1+"/original", "images/b/"+img1+"/w300.jpg")
+	expectKeys(t, m, "images/b/"+renameMarker, "images/b/"+img1+"/original", "images/b/"+img1+"/w300.jpg")
 }
 
 func TestRemoteDelete(t *testing.T) {
@@ -224,4 +240,148 @@ func TestRemoteDeleteLocalOnly(t *testing.T) {
 	if _, err := os.Lstat(filepath.Join(s.Root, "a")); !os.IsNotExist(err) {
 		t.Fatal("local copy not removed")
 	}
+}
+
+// A retry of a completed rename answers "renamed" without moving anything
+func TestRemoteRenameRetryAfterCompletion(t *testing.T) {
+	s, m := remoteStorage(t, "images/a/"+img1+"/original", "images/a/"+img1+"/w100.jpg")
+	if status, err := s.Rename("a", "b"); err != nil || status != "renamed" {
+		t.Fatalf("got %q, %v", status, err)
+	}
+	copies, deletes := m.copies, len(m.deleteBatches)
+
+	for i := 0; i < 2; i++ {
+		status, err := s.Rename("a", "b")
+		if err != nil || status != "renamed" {
+			t.Fatalf("retry got %q, %v", status, err)
+		}
+	}
+	if m.copies != copies || len(m.deleteBatches) != deletes {
+		t.Fatal("a retry after completion changed the bucket")
+	}
+	expectKeys(t, m, "images/b/"+renameMarker, "images/b/"+img1+"/original", "images/b/"+img1+"/w100.jpg")
+}
+
+// Hide, restore and hide again with the same names: each is a real rename
+// that moves every object, and each retry of the last one answers "renamed"
+func TestRemoteRenameHideRestoreHide(t *testing.T) {
+	objects := []string{img1 + "/original", img1 + "/w100.jpg", img2 + "/original"}
+	var keys []string
+	for _, o := range objects {
+		keys = append(keys, "images/acct/"+o)
+	}
+	s, m := remoteStorage(t, keys...)
+
+	for i, step := range [][2]string{{"acct", "hidden"}, {"hidden", "acct"}, {"acct", "hidden"}} {
+		from, to := step[0], step[1]
+		copies := m.copies
+		status, err := s.Rename(from, to)
+		if err != nil || status != "renamed" {
+			t.Fatalf("step %d %s->%s: got %q, %v", i, from, to, status, err)
+		}
+		if n := m.copies - copies; n != len(objects) {
+			t.Fatalf("step %d copied %d objects, want %d", i, n, len(objects))
+		}
+		want := []string{"images/" + to + "/" + renameMarker}
+		for _, o := range objects {
+			want = append(want, "images/"+to+"/"+o)
+		}
+		// The source is gone, its own marker from the step before included
+		expectKeys(t, m, want...)
+		expectMarker(t, m, "images/"+to+"/"+renameMarker, marker{From: from, Status: markerDone, Count: len(objects)})
+	}
+
+	status, err := s.Rename("acct", "hidden")
+	if err != nil || status != "renamed" {
+		t.Fatalf("retry of the last step got %q, %v", status, err)
+	}
+}
+
+// Markers of another rename never make a request look done
+func TestRemoteRenameForeignMarker(t *testing.T) {
+	done := `{"from":"c","status":"done","count":1}`
+
+	// Target has content and another rename's marker: conflict
+	s, m := remoteStorage(t, "images/a/"+img1+"/original", "images/b/"+img2+"/original")
+	m.objects["images/b/"+renameMarker] = done
+	if _, err := s.Rename("a", "b"); !errors.Is(err, ErrExists) {
+		t.Fatalf("got %v, want ErrExists", err)
+	}
+
+	// Source gone, target has content with another rename's done marker
+	s, m = remoteStorage(t, "images/b/"+img2+"/original")
+	m.objects["images/b/"+renameMarker] = done
+	if status, err := s.Rename("a", "b"); err != nil || status != "missing" {
+		t.Fatalf("got %q, %v; want missing", status, err)
+	}
+
+	// A marker that cannot be read names no source
+	s, m = remoteStorage(t, "images/b/"+img2+"/original")
+	m.objects["images/b/"+renameMarker] = "not json"
+	if status, err := s.Rename("a", "b"); err != nil || status != "missing" {
+		t.Fatalf("unreadable marker: got %q, %v; want missing", status, err)
+	}
+
+	// Nothing anywhere: missing
+	s, _ = remoteStorage(t)
+	if status, err := s.Rename("a", "b"); err != nil || status != "missing" {
+		t.Fatalf("got %q, %v; want missing", status, err)
+	}
+}
+
+// A done marker whose target has lost objects since is not taken as done
+func TestRemoteRenameDoneMarkerCountNotMet(t *testing.T) {
+	s, m := remoteStorage(t, "images/a/"+img1+"/original", "images/a/"+img2+"/original")
+	if status, err := s.Rename("a", "b"); err != nil || status != "renamed" {
+		t.Fatalf("got %q, %v", status, err)
+	}
+	delete(m.objects, "images/b/"+img2+"/original")
+
+	if _, err := s.Rename("a", "b"); !errors.Is(err, ErrExists) {
+		t.Fatalf("got %v, want ErrExists for a target smaller than its recorded count", err)
+	}
+}
+
+// New content in the source after a completed rename is not merged into
+// the target: the done marker is not resumed
+func TestRemoteRenameDoneMarkerWithNewSourceContent(t *testing.T) {
+	s, m := remoteStorage(t, "images/a/"+img1+"/original")
+	if status, err := s.Rename("a", "b"); err != nil || status != "renamed" {
+		t.Fatalf("got %q, %v", status, err)
+	}
+	m.PutBytes("images/a/"+img2+"/original", []byte("new upload"), "image/jpeg")
+
+	if _, err := s.Rename("a", "b"); !errors.Is(err, ErrExists) {
+		t.Fatalf("got %v, want ErrExists", err)
+	}
+	expectKeys(t, m, "images/a/"+img2+"/original", "images/b/"+renameMarker, "images/b/"+img1+"/original")
+}
+
+// Deleting a renamed namespace removes its marker
+func TestRemoteDeleteRemovesMarker(t *testing.T) {
+	s, m := remoteStorage(t, "images/a/"+img1+"/original")
+	if status, err := s.Rename("a", "b"); err != nil || status != "renamed" {
+		t.Fatalf("got %q, %v", status, err)
+	}
+	result, err := s.Delete("b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != (Result{Status: "deleted", Images: 1, Files: 1}) {
+		t.Fatalf("got %+v", result)
+	}
+	expectKeys(t, m)
+	if status, err := s.Rename("a", "b"); err != nil || status != "missing" {
+		t.Fatalf("after delete: got %q, %v; want missing", status, err)
+	}
+}
+
+// A source that holds only its own marker has nothing to move
+func TestRemoteRenameSourceWithOnlyItsMarker(t *testing.T) {
+	s, m := remoteStorage(t)
+	m.objects["images/a/"+renameMarker] = `{"from":"x","status":"done","count":1}`
+	if status, err := s.Rename("a", "b"); err != nil || status != "missing" {
+		t.Fatalf("got %q, %v; want missing", status, err)
+	}
+	expectKeys(t, m, "images/a/"+renameMarker)
 }
