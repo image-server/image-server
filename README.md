@@ -38,15 +38,18 @@ Run these commands from the repository root.
 
 **Docker**
 
+Prebuilt images are published on Docker Hub as [`richardiux/image-server`](https://hub.docker.com/r/richardiux/image-server) for `linux/amd64` and `linux/arm64`. Each release is tagged with its version (for example `1.28.0`), and `latest` points at the newest one. Pin a version in production.
+
 ```bash
-docker build -t image-server .
 docker run --rm --name image-server \
   -p 127.0.0.1:7000:7000 -p 127.0.0.1:7002:7002 \
   -e UPLOADER=noop \
   -e ALLOWED_EXTENSIONS=jpg,gif,webp,png \
   -v image-server-data:/opt/image-server/public \
-  image-server
+  richardiux/image-server:1.28.0
 ```
+
+To build the image yourself instead, run `docker build -t image-server .` and use `image-server` as the image name.
 
 This uses local storage, persists images in a Docker volume, and needs no AWS credentials. The image API is at `http://localhost:7000`; health checks and metrics are on port `7002`.
 
