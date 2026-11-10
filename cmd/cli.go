@@ -111,7 +111,7 @@ func init() {
 
 	// Default image settings
 	cmdCli.Flags().IntVar(&config.maximumWidth, "maximum_width", 1000, "Maximum image width")
-	cmdCli.Flags().IntVar(&config.defaultQuality, "default_quality", 75, "Default image compression quality")
+	cmdCli.Flags().IntVar(&config.defaultQuality, "default_quality", 85, "Default image compression quality")
 
 	// Settings
 	cmdCli.Flags().IntVar(&config.uploaderConcurrency, "uploader_concurrency", 10, "Uploader concurrency")

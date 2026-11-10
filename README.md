@@ -330,7 +330,7 @@ For `image.processed`:
     "format": "webp",
     "width": 300,
     "height": 169,
-    "quality": 75,
+    "quality": 85,
     "remote_url": "https://cdn.example.com/products/6e0/072/.../x300.webp"
   }
 }
@@ -452,13 +452,15 @@ File names are derived from their content and parameters, so a URL always serves
 | `--local_base_path` | Local image storage directory | `public` |
 | `--extensions` | Allowed file extensions | `jpg,gif,webp` |
 | `--maximum_width` | Maximum output width | `1000` |
-| `--default_quality` | Default JPEG/WebP quality | `75` |
+| `--default_quality` | Default JPEG/WebP quality | `85` |
 | `--outputs` | Default output formats | - |
 | `--uploader` | Storage backend (`s3` or `noop`) | auto |
 | `--uploader_concurrency` | Parallel upload workers | `10` |
 | `--processor_concurrency` | Parallel processing workers | `4` |
 | `--http_timeout` | HTTP request timeout (seconds) | `5` |
 | `--max_file_age` | Local file cleanup age (minutes) | `30` |
+
+The default quality was 75 before 1.28.0. Variants already generated are reused as they are, so only new ones get the new default. To keep the old default, pass `--default_quality 75`, or set `CUSTOM_FLAGS="--default_quality 75"` in the Docker image.
 
 ## Admin Server
 

@@ -116,7 +116,7 @@ func (p *Processor) CreateImage() error {
 	format := strings.ToLower(ic.Format)
 	quality := int(ic.Quality)
 	if quality == 0 {
-		quality = 75 // default quality
+		quality = 85 // default quality
 	}
 
 	var buf []byte
