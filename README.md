@@ -1,43 +1,150 @@
 # Image Server
 
-A high-performance image processing server written in Go. Supports on-demand image resizing, format conversion, and cloud storage integration.
+**Upload once. Get the right image for every screen.**
 
-## Features
+Image Server is a self-hosted image processing service written in Go, powered by libvips. Turn one original into product thumbnails, square avatars, wide cards, and WebP images by changing the filename in a URL. Variants are generated on demand and saved for reuse.
 
-- **On-demand image processing** - Resize, crop, and convert images via URL parameters
-- **Multiple output formats** - JPEG, WebP, GIF, PNG, HEIC/HEIF (iPhone images)
-- **Cloud storage** - Upload processed images to Amazon S3
-- **Signed URLs** - Secure uploads with HMAC-SHA256 signed URLs (similar to AWS S3 pre-signed URLs)
-- **Batch processing** - Process multiple image sizes in a single request
-- **Prometheus metrics** - Built-in metrics endpoint for monitoring
-- **Webhooks** - Notify external systems when images are uploaded or processed
-- **Docker support** - Ready-to-use Docker image
+Run it locally with files on disk, or connect Amazon S3 and serve your images through a CDN. Your application stores the image hash; Image Server handles resizing, cropping, and format conversion.
+
+[Quick start](#quick-start) · [Resize examples](#resize-examples) · [HTTP API](#server) · [Signed URLs](#signed-urls-authentication) · [Configuration](#server-configuration)
+
+## One image, many possibilities
+
+![Original sample: an orange camper van beside a turquoise alpine lake](docs/images/sample.jpg)
+
+The same original, processed by Image Server:
+
+| Keep the whole scene | Make a square thumbnail | Fill a wide card |
+| :---: | :---: | :---: |
+| ![Proportional resize of the full scene](docs/images/w480.jpg) | ![Square center crop of the camper van](docs/images/x240.jpg) | ![Wide center crop of the lake and van](docs/images/480x240.jpg) |
+| `w480.jpg` · 480 × 320 | `x240.jpg` · 240 × 240 | `480x240.jpg` · 480 × 240 |
+
+The original is an AI-generated sample included in this repository. Every variant above is actual server output. [Sample source and regeneration instructions](docs/images/README.md).
+
+## Why use it?
+
+- **Keep image work out of your app.** Request the dimensions you need from a URL, without writing a separate upload and resize pipeline.
+- **Serve different layouts from one original.** Use proportional resizing, centered crops, or explicit crop regions for avatars, catalogs, and responsive pages.
+- **Choose format and quality per request.** Export JPEG, WebP, PNG, and GIF; read HEIC/HEIF inputs when supported by your libvips installation.
+- **Prepare variants ahead of time.** Generate several sizes during upload or batch-process an existing image.
+- **Choose local or cloud storage.** Start without cloud credentials, then use S3 and your CDN when needed.
+- **Control access and observe the service.** HMAC-signed URLs, Prometheus metrics, Statsd, health checks, and signed webhooks are built in.
 
 ## Quick Start
 
-### Using Docker
+Run these commands from the repository root.
+
+### Start the server
+
+**Docker**
 
 ```bash
 docker build -t image-server .
-docker run -p 7000:7000 -p 7002:7002 image-server
+docker run --rm --name image-server \
+  -p 127.0.0.1:7000:7000 -p 127.0.0.1:7002:7002 \
+  -e UPLOADER=noop \
+  -e ALLOWED_EXTENSIONS=jpg,gif,webp,png \
+  -v image-server-data:/opt/image-server/public \
+  image-server
 ```
 
-### Building from Source
+This uses local storage, persists images in a Docker volume, and needs no AWS credentials. The image API is at `http://localhost:7000`; health checks and metrics are on port `7002`.
 
-Requires Go 1.21+ and libvips.
+**Or build from source**
+
+Use the Go version declared in [`go.mod`](go.mod) (currently Go 1.27.3) and install libvips with its development headers:
 
 ```bash
 # macOS
 brew install vips
 
 # Ubuntu/Debian
-apt-get install libvips-dev
+sudo apt-get install build-essential pkg-config libvips-dev
 
-# Build
+# Build and run with local storage
 go build -o image-server .
+./image-server server --uploader noop --extensions jpg,gif,webp,png
+```
 
-# Run
-./image-server server --port 7000
+### Upload the included sample
+
+In another terminal, upload the original. This example uses Python 3 to read the returned hash:
+
+```bash
+response=$(curl --fail --silent --show-error \
+  -H 'Content-Type: image/jpeg' \
+  --data-binary @docs/images/sample.jpg \
+  http://localhost:7000/demo)
+printf '%s\n' "$response"
+
+hash=$(printf '%s' "$response" | python3 -c 'import json, sys; print(json.load(sys.stdin)["hash"])')
+image_path=$(printf '%s' "$hash" | sed 's|^\(...\)\(...\)\(...\)|\1/\2/\3/|')
+base="http://localhost:7000/demo/$image_path"
+```
+
+The response contains `hash`, `width`, `height`, and `content_type`. The hash identifies the original; the URL splits its first nine characters into three directory segments.
+
+### Request your first variants
+
+Continue in the same terminal:
+
+```bash
+# Resize to 480 pixels wide, keeping the original aspect ratio
+curl --fail "$base/w480.jpg" -o landscape.jpg
+
+# Generate a square thumbnail, cropped from the center
+curl --fail "$base/x240.jpg" -o thumbnail.jpg
+
+# Fill a 480 × 240 card without stretching the image
+curl --fail "$base/480x240.jpg" -o card.jpg
+
+# Convert to WebP and choose compression quality
+curl --fail "$base/w480-q80.webp" -o landscape.webp
+```
+
+Open the downloaded files to see the results. Each new filename creates a variant on its first request; later requests reuse the saved file.
+
+## Resize examples
+
+Append a filename to the image's base URL (`$base` in the walkthrough):
+
+| Filename | Result | Useful for |
+| --- | --- | --- |
+| `w480.jpg` | 480 px wide, preserving aspect ratio | Article images and responsive layouts |
+| `x240.jpg` | 240 × 240, center-cropped | Avatars and product thumbnails |
+| `480x240.jpg` | 480 × 240, resized to cover and center-cropped | Cards and banners |
+| `w480-q50.jpg` | Proportional resize with JPEG quality 50 | Choosing a size/quality tradeoff |
+| `w480-q80.webp` | Proportional resize encoded as WebP | WebP versions for the web |
+| `full_size.png` | Original dimensions, re-encoded as PNG | Format conversion without resizing |
+| `c0.250_0.250_0.750_0.750-w480.jpg` | Crop the middle half, then shrink to at most 480 px wide | Selecting a specific region |
+
+Two dimensions mean **fill and crop**, so the image keeps its proportions. Explicit crop regions use normalized coordinates; see [Cropping](#cropping) for the full syntax. PNG requests require `--extensions jpg,gif,webp,png`; JPEG, GIF, and WebP are enabled by default.
+
+### Pick a region
+
+`c0.250_0.250_0.750_0.750-w480.jpg` selects the middle 50% of the original in both directions, then reduces its width to 480 pixels. Unlike a centered crop to fixed dimensions, this lets you choose exactly which part of the original to keep.
+
+![Explicit region crop, showing the camper van and lake in more detail](docs/images/c0.250_0.250_0.750_0.750-w480.jpg)
+
+```bash
+curl --fail "$base/c0.250_0.250_0.750_0.750-w480.jpg" -o detail.jpg
+```
+
+### Use it in a page
+
+Replace the example host and image path with your own. Width variants make a natural `srcset`:
+
+```html
+<img
+  src="https://images.example.com/demo/abc/def/012/3456789abcdef0123456789ab/w480.jpg"
+  srcset="
+    https://images.example.com/demo/abc/def/012/3456789abcdef0123456789ab/w480.jpg 480w,
+    https://images.example.com/demo/abc/def/012/3456789abcdef0123456789ab/w960.jpg 960w
+  "
+  sizes="(max-width: 600px) 100vw, 480px"
+  alt="Orange camper van beside an alpine lake"
+  loading="lazy"
+/>
 ```
 
 ## Server
@@ -329,7 +436,7 @@ For `image.processed`:
     "filename": "x300.webp",
     "format": "webp",
     "width": 300,
-    "height": 169,
+    "height": 300,
     "quality": 85,
     "remote_url": "https://cdn.example.com/products/6e0/072/.../x300.webp"
   }
