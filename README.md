@@ -55,7 +55,7 @@ This uses local storage, persists images in a Docker volume, and needs no AWS cr
 
 **Or build from source**
 
-Use the Go version declared in [`go.mod`](go.mod) (currently Go 1.27.3) and install libvips with its development headers:
+Use the Go version declared in [`go.mod`](go.mod) (currently Go 1.27.4) and install libvips with its development headers:
 
 ```bash
 # macOS
