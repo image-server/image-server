@@ -38,7 +38,7 @@ Run these commands from the repository root.
 
 **Docker**
 
-Prebuilt images are published on Docker Hub as [`richardiux/image-server`](https://hub.docker.com/r/richardiux/image-server) for `linux/amd64` and `linux/arm64`. Each release is tagged with its version (for example `1.27.0`), and `latest` points at the newest one. Pin a version in production.
+Prebuilt images are published on Docker Hub as [`richardiux/image-server`](https://hub.docker.com/r/richardiux/image-server) for `linux/amd64` and `linux/arm64`. Each release is tagged with its version (for example `1.28.0`), and `latest` points at the newest one. Pin a version in production.
 
 ```bash
 docker run --rm --name image-server \
@@ -46,7 +46,7 @@ docker run --rm --name image-server \
   -e UPLOADER=noop \
   -e ALLOWED_EXTENSIONS=jpg,gif,webp,png \
   -v image-server-data:/opt/image-server/public \
-  richardiux/image-server:1.27.0
+  richardiux/image-server:1.28.0
 ```
 
 To build the image yourself instead, run `docker build -t image-server .` and use `image-server` as the image name.
