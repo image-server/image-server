@@ -66,7 +66,6 @@ type AdminHandler struct{}
 
 // It returns a data code 501 when the server is shutting down, or when a processor is not detected.
 // Details are provided in the body of the request.
-//
 func (f *AdminHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	processorAvailable := cli.Available
 

@@ -7,12 +7,12 @@ import (
 
 // Error codes for signature validation failures
 const (
-	ErrCodeMissingSignature  = "MissingSignature"
-	ErrCodeInvalidSignature  = "InvalidSignature"
-	ErrCodeSignatureExpired  = "SignatureExpired"
-	ErrCodeSignatureTTL      = "SignatureTTLExceeded"
-	ErrCodeInvalidPath       = "InvalidPath"
-	ErrCodeInvalidExpires    = "InvalidExpires"
+	ErrCodeMissingSignature = "MissingSignature"
+	ErrCodeInvalidSignature = "InvalidSignature"
+	ErrCodeSignatureExpired = "SignatureExpired"
+	ErrCodeSignatureTTL     = "SignatureTTLExceeded"
+	ErrCodeInvalidPath      = "InvalidPath"
+	ErrCodeInvalidExpires   = "InvalidExpires"
 )
 
 // Error represents a signature validation error

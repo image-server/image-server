@@ -32,7 +32,7 @@ func (p *Paths) RemoteImageDirectory(namespace string, md5 string) string {
 	return filepath.Join(p.RemoteBasePath, p.imageDirectory(namespace, md5))
 }
 
-//  LocalImagePath returns local path for resized image
+// LocalImagePath returns local path for resized image
 func (p *Paths) LocalImagePath(namespace string, md5 string, imageName string) string {
 	return filepath.Join(p.LocalBasePath, p.imagePath(namespace, md5, imageName))
 }
@@ -104,7 +104,7 @@ func (p *Paths) infoPath(namespace string, md5 string) string {
 	return filepath.Join(p.imageDirectory(namespace, md5), "info.json")
 }
 
-//  imagePath returns relative path to resized image
+// imagePath returns relative path to resized image
 func (p *Paths) imagePath(namespace string, md5 string, imageName string) string {
 	return filepath.Join(p.imageDirectory(namespace, md5), imageName)
 }

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/image-server/image-server/core"
-	"path/filepath"
 	"io"
+	"path/filepath"
 )
 
 func Start(sc *core.ServerConfiguration) {
