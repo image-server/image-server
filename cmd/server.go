@@ -34,7 +34,7 @@ var serverCmd = &cobra.Command{
 		initializeUploader(sc)
 
 		if config.uploaderType != "noop" {
-		  go file_garbage_collector.Start(sc)
+			go file_garbage_collector.Start(sc)
 		}
 
 		port := config.port
@@ -82,7 +82,7 @@ func init() {
 
 	// Default image settings
 	serverCmd.Flags().IntVar(&config.maximumWidth, "maximum_width", 1000, "Maximum image width")
-	serverCmd.Flags().IntVar(&config.defaultQuality, "default_quality", 75, "Default image compression quality")
+	serverCmd.Flags().IntVar(&config.defaultQuality, "default_quality", 85, "Default image compression quality")
 
 	// Settings
 	serverCmd.Flags().IntVar(&config.uploaderConcurrency, "uploader_concurrency", 10, "Uploader concurrency")
