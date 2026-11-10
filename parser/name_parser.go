@@ -9,6 +9,7 @@ import (
 )
 
 var reR, reS, reW, reF, reC, reCropLike, reCoord, reFormat *regexp.Regexp
+
 // Patterns without extension (default to jpg)
 var reRNoExt, reSNoExt, reWNoExt, reFNoExt *regexp.Regexp
 

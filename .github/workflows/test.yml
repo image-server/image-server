@@ -51,6 +51,11 @@ jobs:
           for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:9000/ && exit 0; sleep 1; done
           echo "S3 store did not start"; exit 1
 
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l $(git ls-files '*.go' | grep -v '^vendor/'))
+          if [ -n "$unformatted" ]; then echo "Run gofmt -w on:"; echo "$unformatted"; exit 1; fi
+
       - name: Test
         run: go test -race -count=1 ./...
 

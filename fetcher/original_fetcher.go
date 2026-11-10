@@ -15,10 +15,11 @@ type OriginalFetcher struct {
 // Fetch returns the ImageDetail of downloaded file
 // It will handle the following cases
 //   - The image has never been uploaded
-//     - In this case the URL of the image is required, but the image hash will be empty. The Image will be downloaded from the source
+//   - In this case the URL of the image is required, but the image hash will be empty. The Image will be downloaded from the source
 //   - The image has already been uploaded
-//     - The image hash is present, the image url is optional. The image will be downloaded from our store
-//     - If the image can't be found, and the source url is provided then the image will be downloaded again from the source
+//   - The image hash is present, the image url is optional. The image will be downloaded from our store
+//   - If the image can't be found, and the source url is provided then the image will be downloaded again from the source
+//
 // Returns downloaded true only if it was downloaded from source
 func (f OriginalFetcher) Fetch(namespace string, sourceURL string, imageHash string) (info *info.ImageProperties, downloaded bool, err error) {
 	if sourceURL == "" && imageHash == "" {

@@ -10,10 +10,10 @@ import (
 type EventType string
 
 const (
-	EventImageUploaded        EventType = "image.uploaded"
-	EventImageProcessed       EventType = "image.processed"
+	EventImageUploaded         EventType = "image.uploaded"
+	EventImageProcessed        EventType = "image.processed"
 	EventImageProcessingFailed EventType = "image.processing_failed"
-	EventBatchComplete        EventType = "image.batch_complete"
+	EventBatchComplete         EventType = "image.batch_complete"
 )
 
 // Payload is the base webhook payload structure

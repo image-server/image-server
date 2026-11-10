@@ -21,9 +21,11 @@ func (m *mockPaths) LocalInfoPath(namespace, hash string) string {
 func (m *mockPaths) RemoteInfoPath(namespace, hash string) string {
 	return "/remote/info/" + namespace + "/" + hash + ".json"
 }
-func (m *mockPaths) TempImagePath(s string) string                        { return "/tmp/" + s }
-func (m *mockPaths) RandomTempPath() string                               { return "/tmp/random" }
-func (m *mockPaths) LocalOriginalPath(namespace, hash string) string      { return "/local/" + namespace + "/" + hash + "/original" }
+func (m *mockPaths) TempImagePath(s string) string { return "/tmp/" + s }
+func (m *mockPaths) RandomTempPath() string        { return "/tmp/random" }
+func (m *mockPaths) LocalOriginalPath(namespace, hash string) string {
+	return "/local/" + namespace + "/" + hash + "/original"
+}
 func (m *mockPaths) LocalImagePath(namespace, md5, imageName string) string {
 	return "/local/" + namespace + "/" + md5 + "/" + imageName
 }

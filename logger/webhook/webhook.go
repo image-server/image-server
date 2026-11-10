@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	maxRetries     = 3
+	maxRetries      = 3
 	headerSignature = "X-Webhook-Signature"
 	headerTimestamp = "X-Webhook-Timestamp"
 	userAgent       = "image-server-webhook/1.0"

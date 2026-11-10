@@ -23,10 +23,10 @@ func init() {
 // following redirect codes, Get follows the redirect after calling the
 // Client's CheckRedirect function.
 //
-//    301 (Moved Permanently)
-//    302 (Found)
-//    303 (See Other)
-//    307 (Temporary Redirect)
+//	301 (Moved Permanently)
+//	302 (Found)
+//	303 (See Other)
+//	307 (Temporary Redirect)
 //
 // An error is returned if the Client's CheckRedirect function fails
 // or if there was an HTTP protocol error. A non-2xx response doesn't
@@ -34,7 +34,6 @@ func init() {
 //
 // When err is nil, resp always contains a non-nil resp.Body.
 // Caller should close resp.Body when done reading from it.
-//
 func (c *Client) Get(urlStr string) (resp *http.Response, err error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
