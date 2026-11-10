@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/image-server/image-server/processor/cli"
+	"github.com/image-server/image-server/processor/vips"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/tylerb/graceful"
 	"github.com/unrolled/render"
@@ -64,10 +65,10 @@ type AdminHandler struct{}
 // ServeHTTP serves the http response for the health page.
 // It returns a response code 200 when the image server is available to process images.
 
-// It returns a data code 501 when the server is shutting down, or when a processor is not detected.
+// It returns a data code 501 when the server is shutting down, or when neither libvips nor ImageMagick is available.
 // Details are provided in the body of the request.
 func (f *AdminHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	processorAvailable := cli.Available
+	processorAvailable := vips.Available || cli.Available
 
 	r := render.New(render.Options{
 		IndentJSON: true,
@@ -82,7 +83,7 @@ func (f *AdminHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		data.Message = "OK"
 		code = 200
 	} else {
-		data.Message = "There is no processor available. Make sure you have image magick installed."
+		data.Message = "There is no processor available. Install libvips or ImageMagick."
 		code = 501
 	}
 
