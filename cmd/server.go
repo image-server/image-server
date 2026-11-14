@@ -107,6 +107,7 @@ func init() {
 	serverCmd.Flags().BoolVar(&config.allowNamespaceAdmin, "allow-namespace-admin", false, "Enable renaming and deleting namespaces")
 	serverCmd.Flags().StringVar(&config.adminSigningSecretsFile, "admin-signing-secrets-file", "", "Path to file with secrets for signing namespace admin requests (one per line)")
 	serverCmd.Flags().StringVar(&config.deleteNamespacePattern, "delete-namespace-pattern", "", "Regex the whole namespace name must match to be deleted (empty disables delete)")
+	serverCmd.Flags().BoolVar(&config.allowImageDelete, "allow-image-delete", false, "Enable deleting single images (requires --allow-namespace-admin)")
 
 	// Webhooks
 	serverCmd.Flags().StringVar(&config.webhookURL, "webhook-url", "", "Webhook endpoint URL (enables webhooks when set)")

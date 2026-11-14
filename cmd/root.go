@@ -78,6 +78,7 @@ type configT struct {
 	allowNamespaceAdmin     bool
 	adminSigningSecretsFile string
 	deleteNamespacePattern  string
+	allowImageDelete        bool
 
 	// Webhooks
 	webhookURL     string
@@ -259,6 +260,9 @@ func serverConfigurationFromConfig() *core.ServerConfiguration {
 // set. It refuses to start without admin secrets.
 func namespaceAdminConfiguration() *core.NamespaceAdminConfiguration {
 	if !config.allowNamespaceAdmin {
+		if config.allowImageDelete {
+			log.Fatal("--allow-image-delete requires --allow-namespace-admin")
+		}
 		return nil
 	}
 
@@ -279,7 +283,7 @@ func namespaceAdminConfiguration() *core.NamespaceAdminConfiguration {
 		maxTTL = time.Hour
 	}
 
-	ac := &core.NamespaceAdminConfiguration{Secrets: secrets, MaxTTL: maxTTL}
+	ac := &core.NamespaceAdminConfiguration{Secrets: secrets, MaxTTL: maxTTL, ImageDelete: config.allowImageDelete}
 	if config.deleteNamespacePattern != "" {
 		pattern, err := namespaces.CompileDeletePattern(config.deleteNamespacePattern)
 		if err != nil {
@@ -287,7 +291,7 @@ func namespaceAdminConfiguration() *core.NamespaceAdminConfiguration {
 		}
 		ac.DeletePattern = pattern
 	}
-	log.Printf("Namespace admin enabled (delete pattern: %q, secrets count: %d)", config.deleteNamespacePattern, len(secrets))
+	log.Printf("Namespace admin enabled (delete pattern: %q, image delete: %t, secrets count: %d)", config.deleteNamespacePattern, config.allowImageDelete, len(secrets))
 	return ac
 }
 

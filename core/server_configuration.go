@@ -59,6 +59,8 @@ type NamespaceAdminConfiguration struct {
 	// DeletePattern must match the whole namespace name for a delete; nil
 	// disables deleting
 	DeletePattern *regexp.Regexp
+	// ImageDelete enables deleting single images (--allow-image-delete)
+	ImageDelete bool
 }
 
 func (sc *ServerConfiguration) UploaderIsAws() bool {

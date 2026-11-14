@@ -326,7 +326,7 @@ Sign a path prefix to allow uploads to any path under it:
 
 ## Renaming and Deleting Namespaces
 
-Whole namespaces can be renamed or deleted, in local storage and, with the S3 uploader, in the bucket. Both are off by default.
+Whole namespaces can be renamed or deleted, and single images deleted, in local storage and, with the S3 uploader, in the bucket. All are off by default.
 
 ```bash
 ./image-server generate-secret > /etc/image-server/admin-secrets.txt
@@ -335,12 +335,13 @@ Whole namespaces can be renamed or deleted, in local storage and, with the S3 up
   --uploader noop \
   --allow-namespace-admin \
   --admin-signing-secrets-file /etc/image-server/admin-secrets.txt \
-  --delete-namespace-pattern 'archive_[a-z0-9]+'
+  --delete-namespace-pattern 'archive_[a-z0-9]+' \
+  --allow-image-delete
 ```
 
 The server refuses to start with `--allow-namespace-admin` but no admin secrets.
 
-**Signing.** Requests use the [signed URL](#signed-urls-authentication) algorithm, but only the admin secrets are accepted (upload secrets are not), a signature is always required, and the signed path must equal the request path (no prefix signing). Signing `DELETE /products` does not allow `POST /products/rename/x`, or the other way round.
+**Signing.** Requests use the [signed URL](#signed-urls-authentication) algorithm, but only the admin secrets are accepted (upload secrets are not), a signature is always required, and the signed path must equal the request path (no prefix signing). Signing `DELETE /products` does not allow `POST /products/rename/x`, or the other way round, or the delete of an image in it.
 
 **Rename** moves a namespace to a new name:
 
@@ -374,17 +375,33 @@ DELETE /{namespace}
 - With S3, objects are deleted in batches of 1,000, then the local copies; a retry after a failure deletes what is left
 - `403` when the name does not match the pattern
 
+**Delete image** removes one image, permanently: its original, `info.json` and every variant, locally and, with the S3 uploader, every object under `{remote_base_path}/{namespace}/{h0-3}/{h3-6}/{h6-9}/{h9-32}/`. It needs `--allow-image-delete` as well as `--allow-namespace-admin`; without it, the route returns `404`. `--delete-namespace-pattern` does not apply: images are deleted from live namespaces.
+
+```
+DELETE /{namespace}/{h0-3}/{h3-6}/{h6-9}/{h9-32}
+200 {"namespace": "products", "hash": "6e0072682e66287b662827da75b244a3", "status": "deleted", "files_deleted": 4}
+```
+
+- `200` with `"status": "missing"` and `"files_deleted": 0` when the image does not exist, so retries are safe
+- `files_deleted` counts objects in the bucket with the S3 uploader (local files are a copy of them), else local files
+- With S3, the objects are deleted first, then the local copies; on an error (`500`) the local copy stays and a retry deletes what is left
+- `400` for a reserved namespace name (`tmp`)
+- A trailing slash is accepted; sign the path exactly as it is sent
+
+Afterwards the original and every variant return `404`, also when they would be read back from the bucket or generated again. The server's own caches (files on disk and decoded originals in memory) are cleared. A CDN or browser that cached a response (e.g. with `--cache_control ... immutable`) can still serve it: purge it there.
+
 A renamed namespace is still served under its new name.
 
-Requests that are generating variants or uploading into a namespace, including variant uploads that continue after the response, finish before it is renamed or deleted, so nothing recreates the old namespace. This coordination is within one server process: run one server per storage location while renaming or deleting. Both routes log one line per request, including the caller's `X-Request-Id`, and count requests in `image_server_namespace_admin_total{op, result}`.
+Requests that are generating variants or uploading into a namespace, including variant uploads that continue after the response, finish before it is renamed or deleted, or an image in it is deleted, so nothing recreates what was removed. Image deletes take the same lock, so they wait for (and hold up) requests, renames and deletes in that namespace. This coordination is within one server process: run one server per storage location while renaming or deleting. These routes log one line per request, including the caller's `X-Request-Id`, and count requests in `image_server_namespace_admin_total{op, result}` (`op` is `rename`, `delete` or `delete_image`).
 
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--allow-namespace-admin` | Enable renaming and deleting namespaces | `false` |
 | `--admin-signing-secrets-file` | Secrets for admin requests (one per line) | - |
 | `--delete-namespace-pattern` | Regex the whole name must match to delete | - (delete disabled) |
+| `--allow-image-delete` | Enable deleting single images (needs `--allow-namespace-admin`) | `false` |
 
-Admin signatures use `--signature-max-ttl`.
+Admin signatures use `--signature-max-ttl`. In the Docker image, pass these flags in `CUSTOM_FLAGS`, e.g. `CUSTOM_FLAGS="--allow-namespace-admin --admin-signing-secrets-file /run/secrets/admin --allow-image-delete"`.
 
 ## Webhooks
 

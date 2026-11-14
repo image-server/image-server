@@ -339,6 +339,7 @@ func nextEvent(t *testing.T, events chan string) string {
 }
 
 func captureLog(t *testing.T) *bytes.Buffer {
+	server.ResetRejectionLog()
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
