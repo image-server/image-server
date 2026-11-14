@@ -22,12 +22,13 @@ import (
 var (
 	deleteNamespacePath = regexp.MustCompile(`^/[a-z0-9_-]+/?$`)
 	renameNamespacePath = regexp.MustCompile(`^/[a-z0-9_-]+/rename/[a-z0-9_-]+/?$`)
+	deleteImagePath     = regexp.MustCompile(`^/[a-z0-9_-]+/[a-f0-9]{3}/[a-f0-9]{3}/[a-f0-9]{3}/[a-f0-9]{23}/?$`)
 )
 
 func isNamespaceAdminRequest(r *http.Request) bool {
 	switch r.Method {
 	case http.MethodDelete:
-		return deleteNamespacePath.MatchString(r.URL.Path)
+		return deleteNamespacePath.MatchString(r.URL.Path) || deleteImagePath.MatchString(r.URL.Path)
 	case http.MethodPost:
 		return renameNamespacePath.MatchString(r.URL.Path)
 	}
@@ -45,6 +46,13 @@ type renameConflictResponse struct {
 	To     string `json:"to"`
 	Status string `json:"status"`
 	Error  string `json:"error"`
+}
+
+type deleteImageResponse struct {
+	Namespace    string `json:"namespace"`
+	Hash         string `json:"hash"`
+	Status       string `json:"status"`
+	FilesDeleted int    `json:"files_deleted"`
 }
 
 type deleteNamespaceResponse struct {
@@ -147,6 +155,47 @@ func DeleteNamespaceHandler(w http.ResponseWriter, req *http.Request, sc *core.S
 	})
 }
 
+// DeleteImageHandler deletes one image: its original with every variant
+// and info file. A missing image returns status "missing". The delete
+// pattern does not apply: it is for images in live namespaces.
+func DeleteImageHandler(w http.ResponseWriter, req *http.Request, sc *core.ServerConfiguration) {
+	defer logger.RequestLatency("delete_image", time.Now())
+	start := time.Now()
+	vars := mux.Vars(req)
+	namespace, hash := vars["namespace"], varsToHash(vars)
+
+	if sc.NamespaceAdmin != nil && !sc.NamespaceAdmin.ImageDelete {
+		rejectNamespaceAdmin(w, req, "delete_image", rejectDisabled, http.StatusNotFound, errors.New("deleting images is not enabled"))
+		return
+	}
+	if !authorizeNamespaceAdmin(w, req, sc, "delete_image") {
+		return
+	}
+
+	result, err := namespaceStorage(sc).DeleteImage(namespace, hash)
+	if errors.Is(err, namespaces.ErrInvalidName) || errors.Is(err, namespaces.ErrInvalidHash) {
+		rejectNamespaceAdmin(w, req, "delete_image", rejectInvalidName, http.StatusBadRequest, err)
+		return
+	}
+	requestID := requestID(req)
+	if err != nil {
+		go logger.NamespaceAdmin("delete_image", "error", "")
+		log.Printf("Delete image failed namespace=%s hash=%s request_id=%q: %v", namespace, hash, requestID, err)
+		errorHandlerJSON(err, w, namespaceAdminErrorStatus(err))
+		return
+	}
+
+	go logger.NamespaceAdmin("delete_image", result.Status, "")
+	log.Printf("Deleted image namespace=%s hash=%s status=%s files=%d took=%s request_id=%q",
+		namespace, hash, result.Status, result.Files, time.Since(start), requestID)
+	render.New(render.Options{IndentJSON: true}).JSON(w, http.StatusOK, deleteImageResponse{
+		Namespace:    namespace,
+		Hash:         hash,
+		Status:       result.Status,
+		FilesDeleted: result.Files,
+	})
+}
+
 // authorizeNamespaceAdmin rejects the request and returns false when admin
 // routes are disabled, the signature is not an admin one, or storage is remote
 func authorizeNamespaceAdmin(w http.ResponseWriter, req *http.Request, sc *core.ServerConfiguration, op string) bool {
@@ -235,7 +284,7 @@ func recordRejection(req *http.Request, op, reason string) {
 
 func namespaceAdminErrorStatus(err error) int {
 	switch {
-	case errors.Is(err, namespaces.ErrInvalidName):
+	case errors.Is(err, namespaces.ErrInvalidName), errors.Is(err, namespaces.ErrInvalidHash):
 		return http.StatusBadRequest
 	case errors.Is(err, namespaces.ErrExists):
 		return http.StatusConflict

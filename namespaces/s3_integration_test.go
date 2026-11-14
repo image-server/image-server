@@ -96,3 +96,22 @@ func TestS3RenameAndDelete(t *testing.T) {
 	Ok(t, err)
 	Equals(t, "missing", status)
 }
+
+func TestS3DeleteImage(t *testing.T) {
+	store := NewS3Store(t)
+	s3.Initialize(store.Bucket, store.Region, s3.Options{UsePathStyle: true, SkipACL: true})
+	for _, k := range []string{"acct/" + img1 + "/original", "acct/" + img1 + "/w100.jpg", "acct/" + img1 + "/info.json", "acct/" + img2 + "/original", "acct2/" + img1 + "/original"} {
+		store.Put(t, "images/"+k, []byte(k), "image/jpeg")
+	}
+	s := Storage{Root: t.TempDir(), Remote: &s3.Uploader{}, RemoteBase: "images"}
+
+	result, err := s.DeleteImage("acct", "6e0072682e66287b662827da75b244a3")
+	Ok(t, err)
+	Equals(t, ImageResult{Status: "deleted", Files: 3}, result)
+	Equals(t, []string{"images/acct/" + img2 + "/original"}, store.Keys(t, "images/acct/"))
+	Equals(t, 1, len(store.Keys(t, "images/acct2/")))
+
+	result, err = s.DeleteImage("acct", "6e0072682e66287b662827da75b244a3")
+	Ok(t, err)
+	Equals(t, "missing", result.Status)
+}

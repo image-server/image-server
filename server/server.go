@@ -67,6 +67,13 @@ func NewRouter(sc *core.ServerConfiguration) *mux.Router {
 		DeleteNamespaceHandler(wr, req, sc)
 	}).Methods("DELETE").Name("deleteNamespace")
 
+	deleteImage := func(wr http.ResponseWriter, req *http.Request) {
+		DeleteImageHandler(wr, req, sc)
+	}
+	imagePath := "/{namespace:[a-z0-9_-]+}/{id1:[a-f0-9]{3}}/{id2:[a-f0-9]{3}}/{id3:[a-f0-9]{3}}/{id4:[a-f0-9]{23}}"
+	router.HandleFunc(imagePath, deleteImage).Methods("DELETE").Name("deleteImage")
+	router.HandleFunc(imagePath+"/", deleteImage).Methods("DELETE")
+
 	admin := &AdminHandler{}
 	router.HandleFunc("/status_check", admin.ServeHTTP)
 	return router
